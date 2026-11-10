@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Place } from '../types';
-import { Star, MapPin, Phone, ArrowUpRight, Compass } from 'lucide-react';
+import { Star, MapPin, ArrowUpRight, Compass, Share2, Award } from 'lucide-react';
 
 interface PlaceCardProps {
   place: Place;
@@ -44,6 +44,20 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
         <div className="absolute top-3 right-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm">
           {categoryLabels[place.category] || place.category}
         </div>
+
+        {/* Standard certification logo badge on bottom left of image */}
+        {place.standards && place.standards.length > 0 && (
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-white/90 backdrop-blur-xs rounded-full px-2 py-0.5 border border-stone-200/70 shadow-2xs">
+            <img
+              src={place.standards[0].logoUrl}
+              alt={place.standards[0].name}
+              className="w-3.5 h-3.5 object-contain"
+            />
+            <span className="text-[10px] font-medium text-stone-800">
+              {place.standards[0].name.split(' ')[0]}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Card Content & Zero-Pill Typography */}
@@ -55,7 +69,7 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
             <span aria-hidden="true" className="text-stone-300">·</span>
             {place.priceRange && (
               <>
-                <span className="truncate max-w-[150px]">{place.priceRange}</span>
+                <span className="truncate max-w-[140px]">{place.priceRange}</span>
                 <span aria-hidden="true" className="text-stone-300">·</span>
               </>
             )}

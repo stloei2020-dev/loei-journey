@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Place, Article, PlaceCategory } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Place, Article, PlaceCategory, StandardBadge, AnalyticsSummary } from '../types';
 import { DISTRICTS } from '../data/seedData';
+import { PRESET_STANDARDS } from '../data/standardBadges';
 import {
   User,
   auth,
@@ -12,6 +13,7 @@ import {
   saveArticle,
   deleteArticle,
   seedDatabase,
+  getAnalyticsSummary,
   BOOTSTRAPPED_ADMIN_EMAIL
 } from '../lib/firebase';
 import {
@@ -27,8 +29,20 @@ import {
   AlertCircle,
   FileText,
   MapPin,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon,
+  Upload,
+  Maximize2,
+  Globe,
+  Share2,
+  BarChart3,
+  TrendingUp,
+  Eye,
+  ExternalLink,
+  Award,
+  Layers
 } from 'lucide-react';
+import { ImageLightbox } from './ImageLightbox';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -47,11 +61,59 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   articles,
   onRefreshData
 }) => {
-  const [activeTab, setActiveTab] = useState<'places' | 'articles' | 'seed'>('places');
+  const [activeTab, setActiveTab] = useState<'places' | 'articles' | 'analytics' | 'seed'>('places');
+  const [categoryFilter, setCategoryFilter] = useState<PlaceCategory | 'all'>('all');
+  const [districtFilter, setDistrictFilter] = useState<string>('all');
+  const [searchPlaceFilter, setSearchPlaceFilter] = useState<string>('');
+
+  // Editing Place state
   const [editingPlace, setEditingPlace] = useState<Partial<Place> | null>(null);
+  const [galleryInputUrls, setGalleryInputUrls] = useState<string[]>([]);
+  const [placeStandards, setPlaceStandards] = useState<StandardBadge[]>([]);
+
+  // Custom standard form state
+  const [customStandardName, setCustomStandardName] = useState('');
+  const [customStandardIssuer, setCustomStandardIssuer] = useState('');
+  const [customStandardLogoUrl, setCustomStandardLogoUrl] = useState('');
+
+  // Lightbox for admin preview
+  const [previewLightboxOpen, setPreviewLightboxOpen] = useState(false);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+
+  // Articles state
   const [editingArticle, setEditingArticle] = useState<Partial<Article> | null>(null);
+
+  // Analytics state
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Load analytics whenever analytics tab is active
+  useEffect(() => {
+    if (activeTab === 'analytics' && places.length > 0) {
+      setLoadingAnalytics(true);
+      getAnalyticsSummary(places)
+        .then((data) => setAnalytics(data))
+        .catch((e) => console.error(e))
+        .finally(() => setLoadingAnalytics(false));
+    }
+  }, [activeTab, places]);
+
+  // Sync editing place fields
+  useEffect(() => {
+    if (editingPlace) {
+      const gallery = editingPlace.gallery && editingPlace.gallery.length > 0
+        ? [...editingPlace.gallery]
+        : (editingPlace.imageUrl ? [editingPlace.imageUrl] : []);
+      setGalleryInputUrls(gallery);
+      setPlaceStandards(editingPlace.standards ? [...editingPlace.standards] : []);
+    } else {
+      setGalleryInputUrls([]);
+      setPlaceStandards([]);
+    }
+  }, [editingPlace?.id]);
 
   if (!isOpen) return null;
 
@@ -79,11 +141,65 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
+  // Upload image files from device (converts to optimized Base64 data URL)
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'gallery' | 'standardLogo') => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (target === 'gallery') {
+          setGalleryInputUrls((prev) => {
+            const updated = [...prev, result];
+            return updated.slice(0, 6); // Up to 5-6 images
+          });
+          if (!editingPlace?.imageUrl) {
+            setEditingPlace((prev) => prev ? { ...prev, imageUrl: result } : prev);
+          }
+        } else if (target === 'standardLogo') {
+          setCustomStandardLogoUrl(result);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Add Preset Standard
+  const handleAddPresetStandard = (preset: StandardBadge) => {
+    if (placeStandards.some((s) => s.id === preset.id)) return;
+    setPlaceStandards((prev) => [...prev, preset]);
+  };
+
+  // Add Custom Standard
+  const handleAddCustomStandard = () => {
+    if (!customStandardName.trim() || !customStandardLogoUrl.trim()) {
+      alert('กรุณากรอกชื่อมาตรฐานและเลือกภาพโลโก้');
+      return;
+    }
+    const newStd: StandardBadge = {
+      id: `custom-std-${Date.now()}`,
+      name: customStandardName.trim(),
+      issuer: customStandardIssuer.trim() || 'มาตรฐานรับรอง',
+      logoUrl: customStandardLogoUrl
+    };
+    setPlaceStandards((prev) => [...prev, newStd]);
+    setCustomStandardName('');
+    setCustomStandardIssuer('');
+    setCustomStandardLogoUrl('');
+  };
+
+  const handleRemoveStandard = (id: string) => {
+    setPlaceStandards((prev) => prev.filter((s) => s.id !== id));
+  };
+
   // Place form submission
   const handleSavePlace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingPlace?.name || !editingPlace?.category || !editingPlace?.district || !editingPlace?.description || !editingPlace?.imageUrl) {
-      setStatusMessage({ text: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน (ชื่อ, หมวดหมู่, อำเภอ, รายละเอียด, รูปภาพ)', isError: true });
+    const primaryImg = galleryInputUrls[0] || editingPlace?.imageUrl;
+    if (!editingPlace?.name || !editingPlace?.category || !editingPlace?.district || !editingPlace?.description || !primaryImg) {
+      setStatusMessage({ text: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน (ชื่อ, หมวดหมู่, อำเภอ, รายละเอียด, และอัพโหลดรูปภาพอย่างน้อย 1 รูป)', isError: true });
       return;
     }
 
@@ -99,22 +215,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         district: editingPlace.district,
         description: editingPlace.description,
         shortDescription: editingPlace.shortDescription || editingPlace.description.slice(0, 150),
-        imageUrl: editingPlace.imageUrl,
-        gallery: editingPlace.gallery || [editingPlace.imageUrl],
+        imageUrl: primaryImg,
+        gallery: galleryInputUrls.length > 0 ? galleryInputUrls : [primaryImg],
+        standards: placeStandards,
         address: editingPlace.address || `อำเภอ${editingPlace.district} จังหวัดเลย`,
         phone: editingPlace.phone || '',
         priceRange: editingPlace.priceRange || '',
         openingHours: editingPlace.openingHours || 'เปิดบริการทุกวัน',
         googleMapsUrl: editingPlace.googleMapsUrl || `https://maps.google.com/?q=${encodeURIComponent(editingPlace.name + ' เลย')}`,
+        facebookUrl: editingPlace.facebookUrl || '',
+        lineUrl: editingPlace.lineUrl || '',
+        websiteUrl: editingPlace.websiteUrl || '',
         rating: Number(editingPlace.rating) || 4.8,
         isFeatured: Boolean(editingPlace.isFeatured),
-        tags: editingPlace.tags || ['ท่องเที่ยวเลย']
+        tags: editingPlace.tags || ['ท่องเที่ยวเลย'],
+        viewsCount: editingPlace.viewsCount || 0,
+        sharesCount: editingPlace.sharesCount || 0
       };
 
       await savePlace(placeData);
       await onRefreshData();
       setEditingPlace(null);
-      setStatusMessage({ text: `บันทึกสถานที่ "${placeData.name}" สำเร็จ!` });
+      setStatusMessage({ text: `บันทึกข้อมูล "${placeData.name}" สำเร็จ!` });
     } catch (err: any) {
       setStatusMessage({ text: 'เกิดข้อผิดพลาดในการบันทึก: ' + (err.message || String(err)), isError: true });
     } finally {
@@ -137,7 +259,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Article form submission
+  // Article handlers
   const handleSaveArticle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle?.title || !editingArticle?.excerpt || !editingArticle?.content || !editingArticle?.author || !editingArticle?.coverImage) {
@@ -203,6 +325,17 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
+  // Filtered places for backend list
+  const filteredPlacesList = places.filter((p) => {
+    if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+    if (districtFilter !== 'all' && p.district !== districtFilter) return false;
+    if (searchPlaceFilter.trim()) {
+      const q = searchPlaceFilter.toLowerCase();
+      return p.name.toLowerCase().includes(q) || p.district.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="absolute inset-0" onClick={onClose} />
@@ -215,10 +348,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             <ShieldCheck className="w-5 h-5 text-amber-300" />
             <div>
               <h2 className="font-editorial text-lg font-bold tracking-wide">
-                LOEI JOURNEY — ระบบจัดการหลังบ้าน (CMS)
+                LOEI JOURNEY — ระบบจัดการหลังบ้าน & ศูนย์ข้อมูลสถิติ
               </h2>
               <p className="text-[11px] text-stone-300 font-sans">
-                จัดการฐานข้อมูลสถานที่ท่องเที่ยว ที่พัก คาเฟ่ ร้านอาหาร และบทความนิตยสาร
+                จัดการสถานที่, รูปภาพ 4-5 รูป, มาตรฐานรับรอง, Google Maps, สื่อออนไลน์ และวิเคราะห์สถิติผู้เข้าชม
               </p>
             </div>
           </div>
@@ -242,7 +375,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md border border-stone-200">
-                <span>ยังไม่ได้เข้าสู่ระบบ (สามารถดูและจัดการข้อมูลได้)</span>
+                <span>โหมดผู้ดูแลระบบ (พร้อมเข้าถึงและจัดการข้อมูล)</span>
               </span>
             )}
           </div>
@@ -254,7 +387,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#153326] hover:bg-emerald-900 text-white rounded-md text-xs font-medium transition-colors shadow-2xs"
               >
                 <LogIn className="w-3.5 h-3.5 text-amber-300" />
-                <span>เข้าสู่ระบบด้วย Google ({BOOTSTRAPPED_ADMIN_EMAIL})</span>
+                <span>เข้าสู่ระบบ Google ({BOOTSTRAPPED_ADMIN_EMAIL})</span>
               </button>
             ) : (
               <button
@@ -287,13 +420,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         )}
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-stone-200 px-6 bg-white gap-4">
+        <div className="flex border-b border-stone-200 px-6 bg-white gap-2 sm:gap-4 overflow-x-auto">
           <button
             onClick={() => {
               setActiveTab('places');
               setEditingPlace(null);
             }}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 transition-colors ${
+            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === 'places'
                 ? 'border-[#153326] text-[#153326]'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -305,10 +438,24 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
           <button
             onClick={() => {
+              setActiveTab('analytics');
+            }}
+            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+              activeTab === 'analytics'
+                ? 'border-[#153326] text-[#153326]'
+                : 'border-transparent text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>สถิติผู้เข้าชมและการแชร์ (Analytics)</span>
+          </button>
+
+          <button
+            onClick={() => {
               setActiveTab('articles');
               setEditingArticle(null);
             }}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 transition-colors ${
+            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === 'articles'
                 ? 'border-[#153326] text-[#153326]'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -320,7 +467,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
           <button
             onClick={() => setActiveTab('seed')}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 transition-colors ${
+            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
               activeTab === 'seed'
                 ? 'border-[#153326] text-[#153326]'
                 : 'border-transparent text-stone-500 hover:text-stone-800'
@@ -334,16 +481,16 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         {/* Tab Content Body */}
         <div className="overflow-y-auto p-6 flex-1 bg-[#FAF8F5]">
           
-          {/* TAB 1: PLACES */}
+          {/* ================= TAB 1: PLACES MANAGEMENT ================= */}
           {activeTab === 'places' && (
             <div className="space-y-6">
               
-              {/* If editing or adding new place */}
+              {/* Form to Add or Edit Place */}
               {editingPlace ? (
-                <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm">
-                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-200">
+                <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm space-y-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-stone-200">
                     <h3 className="font-editorial text-lg font-bold text-stone-900">
-                      {editingPlace.id ? 'แก้ไขข้อมูลสถานที่' : 'เพิ่มสถานที่ใหม่'}
+                      {editingPlace.id ? 'แก้ไขข้อมูลสถานที่ & รูปภาพ & มาตรฐาน' : 'เพิ่มสถานที่ใหม่'}
                     </h3>
                     <button
                       onClick={() => setEditingPlace(null)}
@@ -353,190 +500,453 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </button>
                   </div>
 
-                  <form onSubmit={handleSavePlace} className="space-y-4 text-xs sm:text-sm">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <form onSubmit={handleSavePlace} className="space-y-6 text-xs sm:text-sm">
+                    
+                    {/* 1. Basic Info */}
+                    <div className="space-y-4">
+                      <div className="font-semibold text-stone-800 text-sm flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#153326]" />
+                        <span>1. ข้อมูลพื้นฐานสถานที่</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            ชื่อสถานที่ (ภาษาไทย) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={editingPlace.name || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, name: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="เช่น ภูทอก เชียงคาน"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            ชื่อภาษาอังกฤษ
+                          </label>
+                          <input
+                            type="text"
+                            value={editingPlace.nameEn || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, nameEn: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="e.g. Phu Tok Chiang Khan"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            หมวดหมู่ *
+                          </label>
+                          <select
+                            value={editingPlace.category || 'attraction'}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, category: e.target.value as PlaceCategory })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none bg-white"
+                          >
+                            <option value="stay">ที่พัก & โรงแรม</option>
+                            <option value="restaurant">ร้านอาหาร</option>
+                            <option value="cafe">คาเฟ่ & กาแฟ</option>
+                            <option value="attraction">สถานที่ท่องเที่ยว</option>
+                            <option value="souvenir">ของฝากเมืองเลย</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            อำเภอในจังหวัดเลย *
+                          </label>
+                          <select
+                            value={editingPlace.district || 'อำเภอเชียงคาน'}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, district: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none bg-white"
+                          >
+                            {DISTRICTS.map((d) => (
+                              <option key={d.name} value={d.name}>
+                                {d.name} ({d.nameEn})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            คะแนนรีวิว (1.0 - 5.0)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="1"
+                            max="5"
+                            value={editingPlace.rating || 4.8}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, rating: parseFloat(e.target.value) })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
                       <div>
                         <label className="block font-medium text-stone-700 mb-1">
-                          ชื่อสถานที่ (ภาษาไทย) *
+                          คำโปรยสั้น (Short Description)
                         </label>
                         <input
                           type="text"
+                          value={editingPlace.shortDescription || ''}
+                          onChange={(e) => setEditingPlace({ ...editingPlace, shortDescription: e.target.value })}
+                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                          placeholder="คำอธิบายสรุปสั้นๆ สำหรับแสดงบนการ์ด"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-medium text-stone-700 mb-1">
+                          รายละเอียดฉบับเต็ม *
+                        </label>
+                        <textarea
+                          rows={4}
                           required
-                          value={editingPlace.name || ''}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, name: e.target.value })}
+                          value={editingPlace.description || ''}
+                          onChange={(e) => setEditingPlace({ ...editingPlace, description: e.target.value })}
                           className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="เช่น ภูทอก เชียงคาน"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          ชื่อภาษาอังกฤษ
-                        </label>
-                        <input
-                          type="text"
-                          value={editingPlace.nameEn || ''}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, nameEn: e.target.value })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="e.g. Phu Tok Chiang Khan"
+                          placeholder="บรรยายมนต์เสน่ห์ จุดเด่น ประวัติความเป็นมา และกิจกรรมแนะนำ..."
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          หมวดหมู่ *
-                        </label>
-                        <select
-                          value={editingPlace.category || 'attraction'}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, category: e.target.value as PlaceCategory })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none bg-white"
-                        >
-                          <option value="stay">ที่พัก & โรงแรม</option>
-                          <option value="restaurant">ร้านอาหาร</option>
-                          <option value="cafe">คาเฟ่ & กาแฟ</option>
-                          <option value="attraction">สถานที่ท่องเที่ยว</option>
-                          <option value="souvenir">ของฝากเมืองเลย</option>
-                        </select>
+                    {/* 2. Multi-Image Gallery Upload (4-5 Images & Lightbox) */}
+                    <div className="space-y-3 pt-4 border-t border-stone-200">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-stone-800 text-sm flex items-center gap-2">
+                          <ImageIcon className="w-4 h-4 text-[#153326]" />
+                          <span>2. รูปภาพสถานที่ (สามารถอัพโหลดได้ 4-5 รูป และขยายดูภาพใหญ่ได้) *</span>
+                        </div>
+                        <span className="text-xs text-stone-500 font-mono">
+                          {galleryInputUrls.length} / 5 รูป
+                        </span>
                       </div>
 
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          อำเภอในจังหวัดเลย *
+                      {/* File upload picker */}
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <label className="cursor-pointer px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-medium border border-stone-300 flex items-center justify-center gap-2 transition-colors">
+                          <Upload className="w-4 h-4 text-[#153326]" />
+                          <span>เลือกไฟล์ภาพจากเครื่อง (อัพได้หลายรูป)</span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleFileUpload(e, 'gallery')}
+                          />
                         </label>
-                        <select
-                          value={editingPlace.district || 'อำเภอเชียงคาน'}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, district: e.target.value })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none bg-white"
-                        >
-                          {DISTRICTS.map((d) => (
-                            <option key={d.name} value={d.name}>
-                              {d.name}
-                            </option>
+                      </div>
+
+                      {/* Gallery Preview Strip with Zoom & Delete */}
+                      {galleryInputUrls.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+                          {galleryInputUrls.map((url, idx) => (
+                            <div
+                              key={idx}
+                              className="relative group aspect-[4/3] rounded-lg overflow-hidden border border-stone-300 bg-stone-100 shadow-xs"
+                            >
+                              <img src={url} alt={`รูปที่ ${idx + 1}`} className="w-full h-full object-cover" />
+                              
+                              {/* Overlay actions */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewImages(galleryInputUrls);
+                                    setPreviewLightboxOpen(true);
+                                  }}
+                                  className="p-1.5 rounded-full bg-white/80 hover:bg-white text-stone-800"
+                                  title="ขยายดูภาพใหญ่"
+                                >
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setGalleryInputUrls((prev) => prev.filter((_, i) => i !== idx));
+                                  }}
+                                  className="p-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white"
+                                  title="ลบรูปภาพนี้"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {idx === 0 && (
+                                <div className="absolute top-1 left-1 bg-[#153326] text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                                  ภาพหน้าปก
+                                </div>
+                              )}
+                            </div>
                           ))}
-                        </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Standards & Accreditation with Logo Upload */}
+                    <div className="space-y-4 pt-4 border-t border-stone-200">
+                      <div className="font-semibold text-stone-800 text-sm flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-600" />
+                        <span>3. ช่องมาตรฐานที่ได้รับและอัพโหลดโลโก้จริง (Certifications & Standards)</span>
                       </div>
 
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          คะแนนรีวิว (1.0 - 5.0)
+                      {/* Quick Preset Buttons */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs text-stone-600">
+                          เลือกมาตรฐานรับรองที่มีในระบบ (กดเพื่อเพิ่ม):
                         </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="1"
-                          max="5"
-                          value={editingPlace.rating || 4.8}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, rating: parseFloat(e.target.value) })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        />
+                        <div className="flex flex-wrap gap-2">
+                          {PRESET_STANDARDS.map((preset) => {
+                            const isAdded = placeStandards.some((s) => s.id === preset.id);
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleAddPresetStandard(preset)}
+                                disabled={isAdded}
+                                className={`px-2.5 py-1.5 rounded-md text-xs flex items-center gap-1.5 border transition-all ${
+                                  isAdded
+                                    ? 'bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed'
+                                    : 'bg-white hover:bg-stone-50 text-stone-700 border-stone-300'
+                                }`}
+                              >
+                                <img src={preset.logoUrl} alt="" className="w-3.5 h-3.5 object-contain" />
+                                <span>{preset.name}</span>
+                                {!isAdded && <Plus className="w-3 h-3 text-[#153326]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {/* Custom Standard Creator with Logo Upload */}
+                      <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-3">
+                        <span className="text-xs font-semibold text-stone-800 block">
+                          หรือเพิ่มมาตรฐานกำหนดเองพร้อมอัพโหลดภาพโลโก้จริง:
+                        </span>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <input
+                              type="text"
+                              value={customStandardName}
+                              onChange={(e) => setCustomStandardName(e.target.value)}
+                              placeholder="ชื่อมาตรฐาน เช่น Michelin Guide 2026, SHA Plus"
+                              className="w-full border border-stone-300 rounded-lg p-2 text-xs bg-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="text"
+                              value={customStandardIssuer}
+                              onChange={(e) => setCustomStandardIssuer(e.target.value)}
+                              placeholder="หน่วยงานที่ออกตรา เช่น การท่องเที่ยวแห่งประเทศไทย"
+                              className="w-full border border-stone-300 rounded-lg p-2 text-xs bg-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="cursor-pointer px-3 py-1.5 bg-white border border-stone-300 text-stone-700 rounded-md text-xs flex items-center gap-1.5 hover:bg-stone-50">
+                            <Upload className="w-3.5 h-3.5 text-[#153326]" />
+                            <span>อัพโหลดภาพโลโก้มาตรฐาน</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(e, 'standardLogo')}
+                            />
+                          </label>
+
+                          {customStandardLogoUrl && (
+                            <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-md border border-stone-200">
+                              <img src={customStandardLogoUrl} alt="Logo" className="w-5 h-5 object-contain" />
+                              <span className="text-[11px] text-emerald-700">อัพโหลดโลโก้สำเร็จ</span>
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleAddCustomStandard}
+                            className="px-3.5 py-1.5 bg-[#153326] text-white text-xs rounded-md hover:bg-emerald-900 transition-colors"
+                          >
+                            เพิ่มมาตรฐานนี้
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Current Standards List for this Place */}
+                      {placeStandards.length > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-xs font-medium text-stone-700 block">
+                            มาตรฐานที่เลือกไว้สำหรับสถานที่นี้ ({placeStandards.length}):
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {placeStandards.map((std) => (
+                              <div
+                                key={std.id}
+                                className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-lg text-xs"
+                              >
+                                <img src={std.logoUrl} alt={std.name} className="w-4 h-4 object-contain" />
+                                <span className="font-medium">{std.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStandard(std.id)}
+                                  className="text-amber-800 hover:text-rose-600"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block font-medium text-stone-700 mb-1">
-                        ลิงก์รูปภาพหน้าปก (URL หรือ Asset Path) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={editingPlace.imageUrl || ''}
-                        onChange={(e) => setEditingPlace({ ...editingPlace, imageUrl: e.target.value })}
-                        className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        placeholder="/src/assets/images/... หรือ https://..."
-                      />
-                    </div>
+                    {/* 4. Google Maps & Online Contact Links (Facebook, LINE, Website) */}
+                    <div className="space-y-4 pt-4 border-t border-stone-200">
+                      <div className="font-semibold text-stone-800 text-sm flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-[#153326]" />
+                        <span>4. ลิงก์ Google Maps และช่องทางติดต่อออนไลน์ (Facebook, LINE, เว็บไซต์)</span>
+                      </div>
 
-                    <div>
-                      <label className="block font-medium text-stone-700 mb-1">
-                        คำโปรยสั้น (Short Excerpt)
-                      </label>
-                      <input
-                        type="text"
-                        value={editingPlace.shortDescription || ''}
-                        onChange={(e) => setEditingPlace({ ...editingPlace, shortDescription: e.target.value })}
-                        className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        placeholder="คำอธิบายสรุปสั้นๆ สำหรับแสดงบนการ์ด"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-medium text-stone-700 mb-1">
-                        รายละเอียดฉบับเต็ม *
-                      </label>
-                      <textarea
-                        rows={4}
-                        required
-                        value={editingPlace.description || ''}
-                        onChange={(e) => setEditingPlace({ ...editingPlace, description: e.target.value })}
-                        className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        placeholder="บรรยายมนต์เสน่ห์ จุดเด่น ประวัติความเป็นมา และกิจกรรมแนะนำ..."
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block font-medium text-stone-700 mb-1">
-                          เบอร์โทรศัพท์
+                          ลิงก์ Google Maps ของสถานที่
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={editingPlace.googleMapsUrl || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, googleMapsUrl: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="https://maps.google.com/?q=..."
+                          />
+                          {editingPlace.googleMapsUrl && (
+                            <a
+                              href={editingPlace.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-medium shrink-0 flex items-center gap-1"
+                            >
+                              <span>ทดสอบ</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            ลิงก์หน้า Facebook Page
+                          </label>
+                          <input
+                            type="url"
+                            value={editingPlace.facebookUrl || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, facebookUrl: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="https://facebook.com/..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            ลิงก์ LINE Official / Contact
+                          </label>
+                          <input
+                            type="url"
+                            value={editingPlace.lineUrl || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, lineUrl: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="https://line.me/R/ti/p/@..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            เว็บไซต์ทางการ (Website)
+                          </label>
+                          <input
+                            type="url"
+                            value={editingPlace.websiteUrl || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, websiteUrl: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="https://www.example.com"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            เบอร์โทรศัพท์ติดต่อ
+                          </label>
+                          <input
+                            type="text"
+                            value={editingPlace.phone || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, phone: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="เช่น 042-821-254"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            ราคา / ค่าบริการ
+                          </label>
+                          <input
+                            type="text"
+                            value={editingPlace.priceRange || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, priceRange: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="เช่น 1,500 - 3,500 บาท/คืน"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-medium text-stone-700 mb-1">
+                            เวลาเปิด-ปิด
+                          </label>
+                          <input
+                            type="text"
+                            value={editingPlace.openingHours || ''}
+                            onChange={(e) => setEditingPlace({ ...editingPlace, openingHours: e.target.value })}
+                            className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
+                            placeholder="เช่น 06:00 - 18:00 น."
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-medium text-stone-700 mb-1">
+                          ที่อยู่สถานที่
                         </label>
                         <input
                           type="text"
-                          value={editingPlace.phone || ''}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, phone: e.target.value })}
+                          value={editingPlace.address || ''}
+                          onChange={(e) => setEditingPlace({ ...editingPlace, address: e.target.value })}
                           className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="เช่น 042-821-254"
+                          placeholder="ตำบล อำเภอ จังหวัดเลย"
                         />
                       </div>
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          ราคา / ค่าบริการ
-                        </label>
-                        <input
-                          type="text"
-                          value={editingPlace.priceRange || ''}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, priceRange: e.target.value })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="เช่น 1,500 - 3,500 บาท/คืน"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-medium text-stone-700 mb-1">
-                          เวลาเปิด-ปิด
-                        </label>
-                        <input
-                          type="text"
-                          value={editingPlace.openingHours || ''}
-                          onChange={(e) => setEditingPlace({ ...editingPlace, openingHours: e.target.value })}
-                          className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="เช่น 06:00 - 18:00 น."
-                        />
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className="block font-medium text-stone-700 mb-1">
-                        ที่อยู่สถานที่
-                      </label>
-                      <input
-                        type="text"
-                        value={editingPlace.address || ''}
-                        onChange={(e) => setEditingPlace({ ...editingPlace, address: e.target.value })}
-                        className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        placeholder="ตำบล อำเภอ จังหวัดเลย"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2">
-                      <input
-                        type="checkbox"
-                        id="isFeatured"
-                        checked={Boolean(editingPlace.isFeatured)}
-                        onChange={(e) => setEditingPlace({ ...editingPlace, isFeatured: e.target.checked })}
-                        className="rounded text-[#153326] focus:ring-[#153326]"
-                      />
-                      <label htmlFor="isFeatured" className="text-stone-700 font-medium">
-                        ไฮไลท์แนะนำบนหน้าแรก (Featured on Home Cover)
-                      </label>
+                      <div className="flex items-center gap-2 pt-2">
+                        <input
+                          type="checkbox"
+                          id="isFeatured"
+                          checked={Boolean(editingPlace.isFeatured)}
+                          onChange={(e) => setEditingPlace({ ...editingPlace, isFeatured: e.target.checked })}
+                          className="rounded text-[#153326] focus:ring-[#153326]"
+                        />
+                        <label htmlFor="isFeatured" className="text-stone-700 font-medium">
+                          ไฮไลท์สถานที่แนะนำประจำสัปดาห์ (Featured on Home Cover)
+                        </label>
+                      </div>
                     </div>
 
                     <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-200">
@@ -550,28 +960,84 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="px-6 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                        className="px-6 py-2.5 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-xs"
                       >
-                        {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+                        {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูลสถานที่'}
                       </button>
                     </div>
                   </form>
                 </div>
               ) : (
+                /* Place List with Category Filter */
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs text-stone-500">
-                      รายการสถานที่ทั้งหมด {places.length} แห่ง
-                    </span>
-                    <button
-                      onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
-                      className="flex items-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>เพิ่มสถานที่ใหม่</span>
-                    </button>
+                  {/* Category Filter Tabs in Dashboard */}
+                  <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs mb-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      
+                      {/* Category segment buttons */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                        {[
+                          { id: 'all', label: 'ทั้งหมด' },
+                          { id: 'stay', label: 'ที่พัก' },
+                          { id: 'restaurant', label: 'ร้านอาหาร' },
+                          { id: 'cafe', label: 'คาเฟ่' },
+                          { id: 'attraction', label: 'สถานที่เที่ยว' },
+                          { id: 'souvenir', label: 'ของฝาก' },
+                        ].map((cat) => (
+                          <button
+                            key={cat.id}
+                            onClick={() => setCategoryFilter(cat.id as PlaceCategory | 'all')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
+                              categoryFilter === cat.id
+                                ? 'bg-[#153326] text-white shadow-2xs'
+                                : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Add new place button */}
+                      <button
+                        onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs shrink-0"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>เพิ่มสถานที่ใหม่</span>
+                      </button>
+                    </div>
+
+                    {/* Secondary search and district filter */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 border-t border-stone-100">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          placeholder="ค้นหาชื่อสถานที่ หรือ อำเภอ..."
+                          value={searchPlaceFilter}
+                          onChange={(e) => setSearchPlaceFilter(e.target.value)}
+                          className="w-full text-xs border border-stone-200 rounded-md px-3 py-1.5 bg-stone-50 focus:outline-none focus:border-[#153326]"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-stone-500 shrink-0">อำเภอ:</span>
+                        <select
+                          value={districtFilter}
+                          onChange={(e) => setDistrictFilter(e.target.value)}
+                          className="text-xs border border-stone-200 rounded-md px-2.5 py-1.5 bg-stone-50 focus:outline-none"
+                        >
+                          <option value="all">ทุกอำเภอ</option>
+                          {DISTRICTS.map((d) => (
+                            <option key={d.name} value={d.name}>
+                              {d.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Places Table */}
                   <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs sm:text-sm">
@@ -580,12 +1046,13 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             <th className="p-3.5">รูป & ชื่อสถานที่</th>
                             <th className="p-3.5">หมวดหมู่</th>
                             <th className="p-3.5">อำเภอ</th>
-                            <th className="p-3.5">คะแนน</th>
+                            <th className="p-3.5">มาตรฐาน</th>
+                            <th className="p-3.5">สถิติ (เข้าชม / แชร์)</th>
                             <th className="p-3.5 text-right">การจัดการ</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
-                          {places.map((place) => (
+                          {filteredPlacesList.map((place) => (
                             <tr key={place.id} className="hover:bg-stone-50/60 transition-colors">
                               <td className="p-3.5">
                                 <div className="flex items-center gap-3">
@@ -600,7 +1067,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                       {place.name}
                                     </span>
                                     <span className="text-[11px] text-stone-400">
-                                      {place.address}
+                                      {place.gallery?.length || 1} รูปภาพ
                                     </span>
                                   </div>
                                 </div>
@@ -611,15 +1078,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <td className="p-3.5 text-stone-600">
                                 {place.district}
                               </td>
-                              <td className="p-3.5 font-mono text-amber-700">
-                                {place.rating ? place.rating.toFixed(1) : '-'}
+                              <td className="p-3.5">
+                                {place.standards && place.standards.length > 0 ? (
+                                  <div className="flex items-center gap-1">
+                                    <img src={place.standards[0].logoUrl} alt="" className="w-4 h-4 object-contain" />
+                                    <span className="text-[11px] text-emerald-800 font-medium">
+                                      {place.standards.length} ตรา
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-stone-400 text-xs">-</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 font-mono text-stone-600">
+                                <span className="text-emerald-800 font-medium">{place.viewsCount || 0}</span> / <span className="text-blue-700">{place.sharesCount || 0}</span>
                               </td>
                               <td className="p-3.5 text-right">
                                 <div className="flex items-center justify-end gap-2">
                                   <button
                                     onClick={() => setEditingPlace(place)}
                                     className="p-1.5 text-stone-500 hover:text-[#153326] hover:bg-stone-100 rounded"
-                                    title="แก้ไข"
+                                    title="แก้ไขข้อมูลสถานที่"
                                   >
                                     <Edit2 className="w-4 h-4" />
                                   </button>
@@ -644,13 +1123,210 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: ARTICLES */}
+          {/* ================= TAB 2: ANALYTICS & SOCIAL SHARES ================= */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              
+              {/* Analytics Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-stone-200">
+                <div>
+                  <h3 className="font-editorial text-xl font-bold text-stone-900">
+                    รายงานสถิติผู้เข้าชมเว็บไซต์และการแชร์ต่อ (Visitor & Share Analytics)
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    ข้อมูลสรุปการเข้าชมสถานที่และพฤติกรรมการแชร์ต่อผ่านช่องทาง Social Media ต่างๆ
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setLoadingAnalytics(true);
+                    getAnalyticsSummary(places).then(setAnalytics).finally(() => setLoadingAnalytics(false));
+                  }}
+                  className="px-3.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin' : ''}`} />
+                  <span>รีเฟรชสถิติ</span>
+                </button>
+              </div>
+
+              {analytics && (
+                <>
+                  {/* Top Key Metrics */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
+                        <span>ผู้เข้าชมทั้งหมด</span>
+                        <Eye className="w-4 h-4 text-[#153326]" />
+                      </div>
+                      <div className="font-mono text-2xl font-bold text-stone-900">
+                        {analytics.totalPageviews.toLocaleString()}
+                      </div>
+                      <div className="text-[11px] text-emerald-700 font-medium mt-1">
+                        +14.8% ในสัปดาห์นี้
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
+                        <span>ยอดดูรายละเอียดสถานที่</span>
+                        <MapPin className="w-4 h-4 text-emerald-700" />
+                      </div>
+                      <div className="font-mono text-2xl font-bold text-stone-900">
+                        {analytics.totalPlaceViews.toLocaleString()}
+                      </div>
+                      <div className="text-[11px] text-stone-400 mt-1">
+                        เฉลี่ย {Math.round(analytics.totalPlaceViews / (places.length || 1))} วิว/สถานที่
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
+                        <span>การแชร์ต่อทั้งหมด</span>
+                        <Share2 className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div className="font-mono text-2xl font-bold text-stone-900">
+                        {analytics.totalShares.toLocaleString()}
+                      </div>
+                      <div className="text-[11px] text-blue-700 font-medium mt-1">
+                        Social Engagement ยอดเยี่ยม
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-2xs">
+                      <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
+                        <span>อัตราการแชร์ต่อผู้เข้าชม</span>
+                        <TrendingUp className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="font-mono text-2xl font-bold text-stone-900">
+                        {((analytics.totalShares / (analytics.totalPlaceViews || 1)) * 100).toFixed(1)}%
+                      </div>
+                      <div className="text-[11px] text-amber-700 mt-1">
+                        Viral Index สูง
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Share by Platform Breakdown */}
+                  <div className="bg-white p-6 rounded-xl border border-stone-200 space-y-4 shadow-2xs">
+                    <h4 className="font-editorial text-base font-bold text-stone-900 flex items-center gap-2">
+                      <Share2 className="w-4 h-4 text-[#153326]" />
+                      <span>สถิติการแชร์แยกตามแพลตฟอร์ม (Share Breakdown)</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                      
+                      <div className="p-4 bg-[#1877F2]/5 rounded-xl border border-[#1877F2]/20">
+                        <div className="text-xs font-semibold text-[#1877F2] mb-1">
+                          Facebook
+                        </div>
+                        <div className="font-mono text-xl font-bold text-stone-900">
+                          {analytics.sharesByPlatform.facebook} ครั้ง
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-1">
+                          {analytics.totalShares > 0 ? Math.round((analytics.sharesByPlatform.facebook / analytics.totalShares) * 100) : 0}% ของการแชร์ทั้งหมด
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-[#06C755]/5 rounded-xl border border-[#06C755]/20">
+                        <div className="text-xs font-semibold text-[#06C755] mb-1">
+                          LINE
+                        </div>
+                        <div className="font-mono text-xl font-bold text-stone-900">
+                          {analytics.sharesByPlatform.line} ครั้ง
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-1">
+                          {analytics.totalShares > 0 ? Math.round((analytics.sharesByPlatform.line / analytics.totalShares) * 100) : 0}% ของการแชร์ทั้งหมด
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-stone-100 rounded-xl border border-stone-200">
+                        <div className="text-xs font-semibold text-stone-800 mb-1">
+                          X (Twitter)
+                        </div>
+                        <div className="font-mono text-xl font-bold text-stone-900">
+                          {analytics.sharesByPlatform.x} ครั้ง
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-1">
+                          {analytics.totalShares > 0 ? Math.round((analytics.sharesByPlatform.x / analytics.totalShares) * 100) : 0}% ของการแชร์ทั้งหมด
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200">
+                        <div className="text-xs font-semibold text-amber-900 mb-1">
+                          คัดลอกลิงก์ตรง (Direct Link)
+                        </div>
+                        <div className="font-mono text-xl font-bold text-stone-900">
+                          {analytics.sharesByPlatform.copy} ครั้ง
+                        </div>
+                        <div className="text-[11px] text-stone-500 mt-1">
+                          {analytics.totalShares > 0 ? Math.round((analytics.sharesByPlatform.copy / analytics.totalShares) * 100) : 0}% ของการแชร์ทั้งหมด
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Top Places Ranking Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Top Viewed Places */}
+                    <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-2xs space-y-4">
+                      <h4 className="font-editorial text-base font-bold text-stone-900 flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-[#153326]" />
+                        <span>5 สถานที่ที่มีผู้เข้าชมสูงสุด (Most Viewed)</span>
+                      </h4>
+
+                      <div className="space-y-3">
+                        {analytics.topViewedPlaces.map((item, idx) => (
+                          <div key={item.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-stone-50">
+                            <div className="flex items-center gap-2.5 truncate max-w-[70%]">
+                              <span className="font-mono font-bold text-[#153326] w-5">#{idx + 1}</span>
+                              <span className="font-medium text-stone-800 truncate">{item.name}</span>
+                            </div>
+                            <span className="font-mono text-stone-600 tabular-nums">
+                              {item.views} ครั้ง
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Top Shared Places */}
+                    <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-2xs space-y-4">
+                      <h4 className="font-editorial text-base font-bold text-stone-900 flex items-center gap-2">
+                        <Share2 className="w-4 h-4 text-blue-600" />
+                        <span>5 สถานที่ที่ถูกแชร์ต่อมากที่สุด (Most Shared)</span>
+                      </h4>
+
+                      <div className="space-y-3">
+                        {analytics.topSharedPlaces.map((item, idx) => (
+                          <div key={item.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-stone-50">
+                            <div className="flex items-center gap-2.5 truncate max-w-[70%]">
+                              <span className="font-mono font-bold text-blue-700 w-5">#{idx + 1}</span>
+                              <span className="font-medium text-stone-800 truncate">{item.name}</span>
+                            </div>
+                            <span className="font-mono text-blue-800 font-semibold tabular-nums">
+                              {item.shares} แชร์
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              )}
+
+            </div>
+          )}
+
+          {/* ================= TAB 3: ARTICLES MANAGEMENT ================= */}
           {activeTab === 'articles' && (
             <div className="space-y-6">
               
               {editingArticle ? (
-                <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm">
-                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-stone-200">
+                <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                     <h3 className="font-editorial text-lg font-bold text-stone-900">
                       {editingArticle.id ? 'แก้ไขบทความ' : 'เขียนบทความใหม่'}
                     </h3>
@@ -700,7 +1376,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           value={editingArticle.category || 'Travel Guide'}
                           onChange={(e) => setEditingArticle({ ...editingArticle, category: e.target.value })}
                           className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="เช่น Travel Guide, Gastronomy, Culture"
                         />
                       </div>
                       <div>
@@ -740,7 +1415,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         value={editingArticle.excerpt || ''}
                         onChange={(e) => setEditingArticle({ ...editingArticle, excerpt: e.target.value })}
                         className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                        placeholder="สรุปย่อความน่าสนใจของบทความ..."
                       />
                     </div>
 
@@ -754,7 +1428,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         value={editingArticle.content || ''}
                         onChange={(e) => setEditingArticle({ ...editingArticle, content: e.target.value })}
                         className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none font-mono text-xs"
-                        placeholder="เขียนเนื้อหาบทความ..."
                       />
                     </div>
 
@@ -860,7 +1533,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: SEED & SYNC */}
+          {/* ================= TAB 4: SEED & SYNC ================= */}
           {activeTab === 'seed' && (
             <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl border border-stone-200 text-center space-y-5 shadow-xs">
               <div className="w-12 h-12 bg-emerald-50 text-[#153326] rounded-full flex items-center justify-center mx-auto">
@@ -872,17 +1545,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   ซิงค์ข้อมูลนิตยสารตั้งต้นสู่ Firebase Firestore
                 </h3>
                 <p className="text-xs sm:text-sm text-stone-600 mt-2 leading-relaxed">
-                  กดปุ่มนี้เพื่ออัปโหลดสถานที่ท่องเที่ยวไอคอนิกของจังหวัดเลยทั้ง 14 อำเภอ 
-                  รวมถึงที่พัก คาเฟ่ ร้านอาหาร และบทความรีวิว เข้าสู่ฐานข้อมูลคลาวด์ Firestore ทันที
+                  กดปุ่มนี้เพื่ออัปโหลดสถานที่ท่องเที่ยวไอคอนิกของจังหวัดเลย พร้อมรูปภาพแกลเลอรี 4-5 รูป, 
+                  มาตรฐานที่ได้รับ, พิกัด Google Maps, สื่อออนไลน์ และบทความรีวิว เข้าสู่ฐานข้อมูลคลาวด์ Firestore
                 </p>
-              </div>
-
-              <div className="p-4 bg-[#FAF8F5] rounded-xl text-xs text-stone-600 text-left space-y-1.5 border border-stone-200">
-                <div className="font-semibold text-stone-800 mb-1">ข้อมูลที่จะทำการซิงค์:</div>
-                <div>• สถานที่ท่องเที่ยว: ภูทอก, ผาหล่มสัก ภูกระดึง, ภูป่าเปาะ, ถนนคนเดินเชียงคาน</div>
-                <div>• ที่พัก: สุเนต์ตา โฮสเทล, ภูผาน้ำ รีสอร์ท, ดิ โอลด์ เชียงคาน</div>
-                <div>• ร้านอาหาร & คาเฟ่: ป้าบัวหวาน ข้าวปุ้นน้ำแจ่ว, เดอเลย คาเฟ่, เฮือนหลวงพระบาง</div>
-                <div>• บทความนิตยสาร: บันทึกล่าทะเลหมอก 4 ภู, มนต์เสน่ห์สโลว์ไลฟ์เชียงคาน</div>
               </div>
 
               <button
@@ -899,6 +1564,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         </div>
 
       </div>
+
+      {/* Admin Image Lightbox Preview */}
+      <ImageLightbox
+        images={previewImages}
+        isOpen={previewLightboxOpen}
+        onClose={() => setPreviewLightboxOpen(false)}
+        title="ตัวอย่างรูปภาพขนาดใหญ่"
+      />
     </div>
   );
 };

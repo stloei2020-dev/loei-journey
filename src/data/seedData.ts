@@ -1,4 +1,5 @@
 import { Place, Article, DistrictInfo } from '../types';
+import { PRESET_STANDARDS } from './standardBadges';
 
 export const HERO_IMAGE = '/src/assets/images/loei_hero_sea_of_mist_1794278412692.jpg';
 export const CHIANG_KHAN_IMAGE = '/src/assets/images/chiang_khan_walking_street_1794278414260.jpg';
@@ -132,14 +133,29 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'จุดชมทะเลหมอกและพระอาทิตย์ขึ้น 360 องศาสุดอลังการริมแม่น้ำโขง',
     description: 'ภูเขาเตี้ยๆ ที่มีความสูงประมาณ 500 เมตรจากระดับน้ำทะเล แต่เป็นจุดชมทะเลหมอกที่หนาแน่นและสวยงามที่สุดแห่งหนึ่งของภาคอีสาน ในช่วงฤดูหนาวทะเลหมอกจะลอยละล่องปกคลุมตัวเมืองเชียงคานและแม่น้ำโขง ตัดกับแสงสีส้มทองของพระอาทิตย์ขึ้นอย่างน่าอัศจรรย์ การเดินทางขึ้นมีรถสองแถวของชาวบ้านให้บริการอย่างสะดวกสบาย',
     imageUrl: HERO_IMAGE,
-    gallery: [HERO_IMAGE, CHIANG_KHAN_IMAGE],
+    gallery: [
+      HERO_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      PHU_KRADUENG_IMAGE,
+      PHU_PA_PO_IMAGE,
+      CUISINE_CAFE_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[4]  // มาตรฐานการท่องเที่ยวไทย
+    ],
     address: 'ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254 (ทต.เชียงคาน)',
     priceRange: 'ค่ารถสองแถวขึ้น-ลง 25-40 บาท/คน',
     openingHours: 'เปิดให้บริการทุกวัน 05:00 - 17:30 น. (ช่วงชมหมอก 05:30 - 08:30 น.)',
     googleMapsUrl: 'https://maps.google.com/?q=Phu+Tok+Chiang+Khan+Loei',
+    facebookUrl: 'https://facebook.com/phutokchiangkhan.official',
+    lineUrl: 'https://line.me/R/ti/p/@chiangkhan',
+    websiteUrl: 'https://loei.mots.go.th',
     rating: 4.9,
     isFeatured: true,
+    viewsCount: 1420,
+    sharesCount: 386,
     tags: ['ทะเลหมอก', 'พระอาทิตย์ขึ้น', 'วิวแม่น้ำโขง', 'ไฮไลท์ห้ามพลาด']
   },
   {
@@ -151,14 +167,27 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'ย่านเรือนไม้โบราณสองฟากถนนชายโขง เปี่ยมมนต์ขลังยามค่ำคืน',
     description: 'ถนนสายวัฒนธรรมที่ทอดยาวเลียบแม่น้ำโขง สองฝั่งถนนเรียงรายไปด้วยบ้านไม้สักโบราณอายุเกือบศตวรรษ ในช่วงเย็นของทุกวันจะเปิดเป็นถนนคนเดิน มีอาหารพื้นเมือง ขนมโบราณ สินค้าแฮนด์เมด เสื้อยืดที่ระลึก และการแสดงเปิดหมวกของเด็กๆ บรรยากาศอบอุ่นและโรแมนติกอย่างยิ่ง',
     imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, HERO_IMAGE],
+    gallery: [
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      CUISINE_CAFE_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[2]  // OTOP 5 ดาว
+    ],
     address: 'ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254',
     priceRange: 'เข้าชมฟรี',
     openingHours: 'ทุกวัน 16:30 - 21:30 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Chiang+Khan+Walking+Street',
+    facebookUrl: 'https://facebook.com/chiangkhanwalkingstreet',
+    lineUrl: 'https://line.me/R/ti/p/@tatloei',
     rating: 4.8,
     isFeatured: true,
+    viewsCount: 1280,
+    sharesCount: 312,
     tags: ['ถนนคนเดิน', 'บ้านไม้โบราณ', 'ริมโขง', 'ของกินพื้นเมือง']
   },
   {
@@ -170,14 +199,26 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'ผาหินทรายยื่นและต้นสนเดียวดาย สัญลักษณ์แห่งการชมอาทิตย์อัสดง',
     description: 'อุทยานแห่งชาติระดับตำนานของเมืองไทย บนยอดภูกระดึงมีพื้นที่ราบกว้างใหญ่กว่า 60 ตารางกิโลเมตร ไฮไลท์สำคัญคือ "ผาหล่มสัก" ชะง่อนหินทรายที่ยื่นออกไปในอากาศเคียงคู่กับต้นสนสามใบ เป็นจุดชมพระอาทิตย์ตกดินที่คลาสสิกและโรแมนติกที่สุดในประเทศไทย นักท่องเที่ยวจะได้สัมผัสการเดินป่า ทุ่งกุหลาบพันปี และน้ำตกเพ็ญพบใหม่',
     imageUrl: PHU_KRADUENG_IMAGE,
-    gallery: [PHU_KRADUENG_IMAGE, HERO_IMAGE],
+    gallery: [
+      PHU_KRADUENG_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE,
+      CHIANG_KHAN_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[1], // Green Hotel / Green Park
+      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+    ],
     address: 'หมู่ 1 ตำบลศรีฐาน อำเภอภูกระดึง จังหวัดเลย 42180',
     phone: '042-871-333',
     priceRange: 'ผู้ใหญ่ 40 บาท, เด็ก 20 บาท (ต่างชาติ 200/100 บาท)',
     openingHours: 'เปิดฤดูกาลท่องเที่ยว 1 ต.ค. - 31 พ.ค. ของทุกปี (ขึ้นภู 06:00 - 13:00 น.)',
     googleMapsUrl: 'https://maps.google.com/?q=Pha+Lom+Sak+Phu+Kradueng',
+    facebookUrl: 'https://facebook.com/PKDnationalpark',
     rating: 5.0,
     isFeatured: true,
+    viewsCount: 1650,
+    sharesCount: 420,
     tags: ['เดินป่า', 'ผาหล่มสัก', 'พระอาทิตย์ตก', 'สนสามใบ', 'ระดับตำนาน']
   },
   {
@@ -189,14 +230,25 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'จุดชมวิวภูหอยอดตัดคล้ายภูเขาไฟฟูจิ ท่ามกลางทุ่งดอกไม้สีทอง',
     description: 'จุดชมวิวทิวทัศน์ที่ได้รับการขนานนามว่าเป็น "ฟูจิเมืองเลย" จากจุดชมวิวจะมองเห็น "ภูหอ" ภูเขาหินปูนยอดตัดตรงที่มีลักษณะละม้ายคล้ายภูเขาไฟฟูจิของญี่ปุ่น หากมาเยือนในช่วงเช้าจะเห็นทะเลหมอกขาวโพลนลอยรอบฐานเขา มีบริการรถอีแต๊กของชุมชนพาขึ้นไปชมวิวมุมสูง 4 จุด พร้อมทุ่งดอกคอสมอสสีเหลืองทองบานสะพรั่ง',
     imageUrl: PHU_PA_PO_IMAGE,
-    gallery: [PHU_PA_PO_IMAGE, HERO_IMAGE],
+    gallery: [
+      PHU_PA_PO_IMAGE,
+      HERO_IMAGE,
+      CUISINE_CAFE_IMAGE,
+      PHU_KRADUENG_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[4] // Thailand Tourism Standard
+    ],
     address: 'บ้านผาหวาย ตำบลปวนพุ อำเภอหนองหิน จังหวัดเลย 42190',
-    phone: '089-952-2824 (ชมรมการท่องเที่ยวเชิงอนุรักษ์)',
+    phone: '089-952-2824',
     priceRange: 'ค่าบริการรถอีแต๊กชุมชน 60 บาท/คน',
     openingHours: 'เปิดทุกวัน 05:00 - 18:00 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Phu+Pa+Po+Nong+Hin+Loei',
+    facebookUrl: 'https://facebook.com/phupapo.fuji',
     rating: 4.7,
     isFeatured: true,
+    viewsCount: 940,
+    sharesCount: 215,
     tags: ['ฟูจิเมืองเลย', 'รถอีแต๊ก', 'ดอกไม้เมืองหนาว', 'ทะเลหมอก']
   },
 
@@ -210,14 +262,28 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'เรือนไม้สักริมโขงสไตล์เรโทรบูทีค ชื่นชมสายน้ำและตักบาตรข้าวเหนียวหน้าบ้าน',
     description: 'ที่พักยอดนิยมระดับไอคอนิกของเชียงคาน รีโนเวทจากบ้านไม้สักเก่าริมแม่น้ำโขง ตกแต่งด้วยเฟอร์นิเจอร์ไม้สไตล์คลาสสิกและของสะสมวินเทจ มีระเบียงส่วนตัวชมพระอาทิตย์ตกริมแม่น้ำโขงอย่างเป็นส่วนตัว พร้อมบริการชุดใส่บาตรข้าวเหนียวตอนเช้าตรู่ และจักรยานให้ปั่นเที่ยวรอบเมืองฟรี',
     imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, HERO_IMAGE],
+    gallery: [
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      CUISINE_CAFE_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[1]  // Green Hotel
+    ],
     address: '166/1 หมู่ 2 ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '086-999-9218',
     priceRange: '1,500 - 3,500 บาท/คืน',
     openingHours: 'เช็คอิน 14:00 น. / เช็คเอาท์ 11:30 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Suneta+Hostel+Chiang+Khan',
+    facebookUrl: 'https://facebook.com/sunetahostel',
+    lineUrl: 'https://line.me/R/ti/p/@suneta',
+    websiteUrl: 'https://sunetahostel.com',
     rating: 4.8,
     isFeatured: true,
+    viewsCount: 1120,
+    sharesCount: 260,
     tags: ['ติดริมแม่น้ำโขง', 'บ้านไม้สัก', 'ตักบาตรข้าวเหนียว', 'มีจักรยานฟรี']
   },
   {
@@ -229,34 +295,29 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'รีสอร์ทหรูท่ามกลางขุนเขา สวนกล้วยไม้ และทะเลสาบธรรมชาติ',
     description: 'รีสอร์ทระดับพรีเมียมบนเนื้อที่หลายร้อยไร่ในอ้อมกอดของเทือกเขาภูเรือ โอบล้อมด้วยธรรมชาติบริสุทธิ์ มีสวนกล้วยไม้เพาะพันธุ์นานาชนิด สระว่ายน้ำกลางแจ้งมองเห็นวิวเทือกเขาแบบพาโนรามา ห้องพักกว้างขวางตกแต่งด้วยไม้ธรรมชาติระเบียงมองเห็นหมอกยามเช้าอย่างเต็มตา',
     imageUrl: HERO_IMAGE,
-    gallery: [HERO_IMAGE, CUISINE_CAFE_IMAGE],
+    gallery: [
+      HERO_IMAGE,
+      CUISINE_CAFE_IMAGE,
+      PHU_KRADUENG_IMAGE,
+      CHIANG_KHAN_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[1], // Green Hotel
+      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+    ],
     address: '252 หมู่ 1 ถนนเลย-ด่านซ้าย ตำบลโคกงาม อำเภอด่านซ้าย/ภูเรือ จังหวัดเลย 42160',
     phone: '042-810-589',
     priceRange: '2,200 - 6,500 บาท/คืน',
     openingHours: 'บริการต้อนรับ 24 ชั่วโมง',
     googleMapsUrl: 'https://maps.google.com/?q=Phu+Pha+Nam+Resort',
+    facebookUrl: 'https://facebook.com/phuphanamresort',
+    websiteUrl: 'https://phuphanamresort.com',
     rating: 4.7,
     isFeatured: true,
+    viewsCount: 890,
+    sharesCount: 195,
     tags: ['สปาระดับพรีเมียม', 'วิวภูเขาพาโนรามา', 'สวนกล้วยไม้', 'ห้องอาหาร']
-  },
-  {
-    id: 'the-old-chiangkhan-boutique',
-    name: 'ดิ โอลด์ เชียงคาน บูทีค โฮเทล',
-    nameEn: 'The Old Chiangkhan Boutique Hotel',
-    category: 'stay',
-    district: 'อำเภอเชียงคาน',
-    shortDescription: 'โรงแรมบูทีคไม้สักร่วมสมัยริมแม่น้ำโขง ผสมผสานเสน่ห์ล้านช้าง',
-    description: 'โรงแรมไม้สองชั้นที่คงเสน่ห์สถาปัตยกรรมไม้พื้นถิ่นเชียงคานไว้อย่างครบถ้วน ภายในตกแต่งด้วยงานผ้าทอมือและเซรามิกทำมือ ระเบียงกว้างริมแม่น้ำโขงเป็นจุดพักผ่อนจิบชากาแฟรับลมหนาวได้อย่างผ่อนคลายที่สุด ตั้งอยู่ติดถนนคนเดินเชียงคาน สะดวกสบายทุกการเดินทาง',
-    imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, HERO_IMAGE],
-    address: '288 หมู่ 2 ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
-    phone: '042-822-119',
-    priceRange: '1,800 - 4,200 บาท/คืน',
-    openingHours: 'เช็คอิน 14:00 น. / เช็คเอาท์ 12:00 น.',
-    googleMapsUrl: 'https://maps.google.com/?q=The+Old+Chiangkhan+Boutique+Hotel',
-    rating: 4.6,
-    isFeatured: false,
-    tags: ['ริมโขง', 'ติดถนนคนเดิน', 'สถาปัตยกรรมไม้', 'รวมอาหารเช้า']
   },
 
   // --- CAFES ---
@@ -269,34 +330,28 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'โรงคั่วกาแฟสเปเชียลตี้คัดสรรเมล็ดอาราบิก้าจากยอดดอยภูเรือและภูหลวง',
     description: 'คาเฟ่โทนไม้อบอุ่นผสมผสานโมเดิร์นคราฟต์ใจกลางเมืองเลย ผู้บุกเบิกวงการกาแฟคลื่นลูกที่สามของจังหวัด นำเมล็ดกาแฟที่ปลูกในดินภูเขาไฟและเทือกเขาสูงของภูเรือมาผ่านการคั่วแบบประณีต มีทั้งเมนูดริป Hand Drip, Cold Brew รมควัน และเบเกอรี่โฮมเมดสไตล์ฝรั่งเศส',
     imageUrl: CUISINE_CAFE_IMAGE,
-    gallery: [CUISINE_CAFE_IMAGE, HERO_IMAGE],
+    gallery: [
+      CUISINE_CAFE_IMAGE,
+      HERO_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[5]  // Specialty Coffee
+    ],
     address: 'ถนนร่วมจิตต์ ตำบลกุดป่อง อำเภอเมืองเลย จังหวัดเลย 42000',
     phone: '087-865-9898',
     priceRange: '75 - 160 บาท/แก้ว',
     openingHours: 'เปิดทุกวัน 08:00 - 17:30 น.',
     googleMapsUrl: 'https://maps.google.com/?q=De+Loei+Cafe',
+    facebookUrl: 'https://facebook.com/deloeicafe',
+    lineUrl: 'https://line.me/R/ti/p/@deloei',
     rating: 4.9,
     isFeatured: true,
+    viewsCount: 980,
+    sharesCount: 245,
     tags: ['Specialty Coffee', 'โรงคั่วกาแฟ', 'เมล็ดกาแฟภูเรือ', 'เบเกอรี่โฮมเมด']
-  },
-  {
-    id: 'jum-loei-rak-chiangkhan',
-    name: 'จำเลยรัก คาเฟ่ เชียงคาน',
-    nameEn: 'Jum Loei Rak Vintage Cafe & Books',
-    category: 'cafe',
-    district: 'อำเภอเชียงคาน',
-    shortDescription: 'คาเฟ่หนังสือและโปสการ์ดยอดฮิตในเรือนไม้คลาสสิกบนถนนคนเดิน',
-    description: 'ร้านกาแฟและของที่ระลึกในตำนานของเชียงคาน บรรยากาศอบอุ่นด้วยผนังไม้ที่เต็มไปด้วยโปสการ์ดความทรงจำของนักเดินทางจากทั่วทุกมุมโลก เมนูกาแฟสด นมสดคาราเมล ขนมปังสังขยาใบเตยโบราณ และมีมุมเขียนโปสการ์ดส่งกลับบ้านสุดคลาสสิก',
-    imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, CUISINE_CAFE_IMAGE],
-    address: 'ถนนชายโขง ซอย 9 ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
-    phone: '081-749-8877',
-    priceRange: '50 - 120 บาท',
-    openingHours: 'เปิดทุกวัน 07:00 - 21:00 น.',
-    googleMapsUrl: 'https://maps.google.com/?q=Jum+Loei+Rak+Chiang+Khan',
-    rating: 4.7,
-    isFeatured: true,
-    tags: ['คาเฟ่ในตำนาน', 'โปสการ์ด', 'ถนนคนเดิน', 'กาแฟโบราณ']
   },
 
   // --- RESTAURANTS ---
@@ -309,34 +364,27 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'อาหารพื้นถิ่นเมืองเลยที่ต้องลิ้มลอง น้ำซุปต้มสมุนไพรร้อนๆ หอมกรุ่น',
     description: '"ข้าวปุ้นน้ำแจ่ว" เป็นเมนูเอกลักษณ์ที่มีเฉพาะที่เชียงคานและจังหวัดเลย เส้นขนมจีนสดทำเอง เสิร์ฟในน้ำซุปต้มกระดูกหมูและเครื่องในหมูที่เคี่ยวนานหลายชั่วโมง โรยด้วยผักกะหล่ำปลีซอย สะระแหน่ ต้นหอม และปรุงรสด้วยพริกตำน้ำแจ่วสูตรเด็ด รสชาติกลมกล่อม หอมสดชื่น ปรุงมะนาวสดเพิ่มความจี๊ดจ๊าด',
     imageUrl: CUISINE_CAFE_IMAGE,
-    gallery: [CUISINE_CAFE_IMAGE, CHIANG_KHAN_IMAGE],
+    gallery: [
+      CUISINE_CAFE_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[3], // Thai SELECT
+      PRESET_STANDARDS[0]  // SHA
+    ],
     address: 'ซอย 14 ถนนศรีเชียงคาน ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '081-380-1412',
     priceRange: '50 - 80 บาท/ชาม',
     openingHours: 'ทุกวัน 07:00 - 14:00 น. (หมดแล้วปิดเลย)',
     googleMapsUrl: 'https://maps.google.com/?q=Pa+Bua+Wan+Khao+Poon+Nam+Jaew',
+    facebookUrl: 'https://facebook.com/pabuawankhaopoon',
     rating: 4.9,
     isFeatured: true,
+    viewsCount: 1350,
+    sharesCount: 380,
     tags: ['อาหารพื้นเมือง', 'ข้าวปุ้นน้ำแจ่ว', 'สูตรดั้งเดิม', 'ต้องลอง']
-  },
-  {
-    id: 'huen-luang-prabang-chiangkhan',
-    name: 'เฮือนหลวงพระบาง ริมโขง',
-    nameEn: 'Huen Luang Prabang Restaurant',
-    category: 'restaurant',
-    district: 'อำเภอเชียงคาน',
-    shortDescription: 'อาหารล้านช้างและอาหารพื้นบ้านริมน้ำโขง ปลาคังสดลวกจิ้มรสเด็ด',
-    description: 'ร้านอาหารรสเลิศในเรือนไม้สองชั้นริมแม่น้ำโขง เสิร์ฟอาหารตำรับหลวงพระบางและอาหารพื้นเมืองเลย อาทิ เอาะหลาม แกงส้มหลวงพระบาง ปลาแม่น้ำโขงทอดกระเทียม ลาบปลาคัง และต้มยำปลากดคังน้ำใส รสชาติจัดจ้านถึงเครื่องสมุนไพร นั่งทานข้าวพร้อมชมวิวแม่น้ำโขงยามอัสดงได้อย่างเพลิดเพลิน',
-    imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, CUISINE_CAFE_IMAGE],
-    address: '156 ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
-    phone: '042-821-046',
-    priceRange: '150 - 450 บาท',
-    openingHours: 'เปิดทุกวัน 11:00 - 14:30 น. และ 17:00 - 21:30 น.',
-    googleMapsUrl: 'https://maps.google.com/?q=Huen+Luang+Prabang+Chiang+Khan',
-    rating: 4.8,
-    isFeatured: true,
-    tags: ['อาหารริมโขง', 'ปลาแม่น้ำโขง', 'ตำรับหลวงพระบาง', 'วิวแม่น้ำ']
   },
 
   // --- SOUVENIRS ---
@@ -349,34 +397,27 @@ export const INITIAL_PLACES: Place[] = [
     shortDescription: 'ของฝากเลื่องชื่อ มะพร้าวแก้วเนื้อนุ่มละมุน หวานน้อย หอมใบเตย',
     description: 'สุดยอดของฝากประจำจังหวัดเลย มะพร้าวแก้วเกรด A ผลิตจากเนื้อมะพร้าวน้ำหอมอ่อน นำมากวนกับน้ำตาลสดและน้ำใบเตยธรรมชาติ ไม่ใส่สารกันบูด เนื้อนุ่มหนึบเคี้ยวเพลิน หอมหวานกำลังดี แหล่งผลิตอยู่ที่ริมแก่งคุดคู้ มีให้เลือกชิมสดๆ ร้อนๆ จากกระทะกวน',
     imageUrl: CUISINE_CAFE_IMAGE,
-    gallery: [CUISINE_CAFE_IMAGE, CHIANG_KHAN_IMAGE],
+    gallery: [
+      CUISINE_CAFE_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[2], // OTOP 5 ดาว
+      PRESET_STANDARDS[0]  // SHA Extra Plus
+    ],
     address: 'ศูนย์รวมของฝากแก่งคุดคู้ ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254',
     priceRange: '100 - 300 บาท/กล่อง',
     openingHours: 'ทุกวัน 08:00 - 18:00 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Kaeng+Khut+Khu+Loei',
+    facebookUrl: 'https://facebook.com/kaengkhutkhu.coconut',
     rating: 4.9,
     isFeatured: true,
+    viewsCount: 820,
+    sharesCount: 190,
     tags: ['ของฝากเมืองเลย', 'มะพร้าวแก้ว', 'แก่งคุดคู้', 'OTOP 5 ดาว']
-  },
-  {
-    id: 'chiang-khan-handwoven-quilt',
-    name: 'ผ้านวมฝ้ายโบราณเชียงคาน',
-    nameEn: 'Chiang Khan Hand-stitched Cotton Quilts',
-    category: 'souvenir',
-    district: 'อำเภอเชียงคาน',
-    shortDescription: 'ผ้านวมฝ้ายแท้เย็บมือ ภูมิปัญญาพื้นบ้านที่มอบความอบอุ่นมาเนิ่นนาน',
-    description: 'หัตถกรรมพื้นบ้านที่สืบทอดกันมากว่า 70 ปี ใช้ฝ้ายธรรมชาติที่ปลูกในพื้นที่ นำมาตีให้ฟูแล้วยัดไส้เย็บมือด้วยความประณีต ผ้านวมจะมีความหนานุ่ม อบอุ่น ทนทาน ระบายอากาศได้ดี เหมาะสำหรับพกพาไปใช้ในฤดูหนาวหรือซื้อเป็นของขวัญของฝากทรงคุณค่า',
-    imageUrl: CHIANG_KHAN_IMAGE,
-    gallery: [CHIANG_KHAN_IMAGE, HERO_IMAGE],
-    address: 'กลุ่มวิสาหกิจชุมชนผ้านวมฝ้าย ถนนศรีเชียงคาน อำเภอเชียงคาน จังหวัดเลย',
-    phone: '084-515-8900',
-    priceRange: '450 - 1,500 บาท/ผืน',
-    openingHours: 'ทุกวัน 08:30 - 18:00 น.',
-    googleMapsUrl: 'https://maps.google.com/?q=Chiang+Khan+Cotton+Quilts',
-    rating: 4.8,
-    isFeatured: false,
-    tags: ['หัตถกรรมพื้นบ้าน', 'ผ้าฝ้ายแท้', 'งานฝีมือ', 'ของฝากเชียงคาน']
   }
 ];
 

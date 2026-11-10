@@ -46,8 +46,15 @@
         },
         "gallery": {
           "type": "array",
-          "description": "List of gallery image URLs",
+          "description": "List of gallery image URLs (4-5 images)",
           "items": { "type": "string" }
+        },
+        "standards": {
+          "type": "array",
+          "description": "Certifications, standards and awards with logo",
+          "items": {
+            "type": "object"
+          }
         },
         "address": {
           "type": "string",
@@ -74,6 +81,21 @@
           "description": "Google Maps link or search query",
           "maxLength": 500
         },
+        "facebookUrl": {
+          "type": "string",
+          "description": "Facebook Page link",
+          "maxLength": 500
+        },
+        "lineUrl": {
+          "type": "string",
+          "description": "LINE Official or Contact link",
+          "maxLength": 500
+        },
+        "websiteUrl": {
+          "type": "string",
+          "description": "Official Website link",
+          "maxLength": 500
+        },
         "rating": {
           "type": "number",
           "description": "Editorial or visitor rating from 1 to 5"
@@ -84,8 +106,16 @@
         },
         "tags": {
           "type": "array",
-          "description": "Highlight tags (e.g. ทะเลหมอก, ริมโขง, ธรรมชาติ)",
+          "description": "Highlight tags",
           "items": { "type": "string" }
+        },
+        "viewsCount": {
+          "type": "number",
+          "description": "Number of times viewed"
+        },
+        "sharesCount": {
+          "type": "number",
+          "description": "Number of times shared"
         },
         "createdAt": {
           "type": "string",
@@ -134,7 +164,7 @@
         },
         "category": {
           "type": "string",
-          "description": "Article classification (e.g. Guide, Culture, Review)",
+          "description": "Article classification",
           "maxLength": 50
         },
         "coverImage": {
@@ -160,6 +190,33 @@
         }
       },
       "required": ["title", "excerpt", "content", "author", "coverImage"]
+    },
+    "AnalyticsEvent": {
+      "title": "AnalyticsEvent",
+      "description": "Visitor view or share event for dashboard analysis",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["pageview", "share", "view_place"]
+        },
+        "placeId": {
+          "type": "string"
+        },
+        "placeName": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "timestamp"]
     },
     "Admin": {
       "title": "Admin",
@@ -192,6 +249,10 @@
     "/articles/{articleId}": {
       "schema": "Article",
       "description": "Editorial magazine articles and travel guides"
+    },
+    "/analytics/{eventId}": {
+      "schema": "AnalyticsEvent",
+      "description": "Visitor traffic and social share analytics"
     },
     "/admins/{adminId}": {
       "schema": "Admin",

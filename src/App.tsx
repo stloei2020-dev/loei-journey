@@ -9,6 +9,7 @@ import {
   getPlaces,
   getArticles,
   testConnection,
+  trackEvent,
   auth,
   onAuthStateChanged,
   signOut,
@@ -70,6 +71,7 @@ export default function App() {
   useEffect(() => {
     testConnection();
     loadData();
+    trackEvent('pageview', undefined, undefined, 'web');
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAdminUser(user);

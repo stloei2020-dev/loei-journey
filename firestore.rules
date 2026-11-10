@@ -43,20 +43,29 @@ service cloud.firestore {
              data.coverImage is string && data.coverImage.size() > 0 && data.coverImage.size() <= 500;
     }
 
-    // Places collection: Public readable for travelers, managed by admins
+    // Places collection: Public readable, managed by admins or public increment of views/shares
     match /places/{placeId} {
       allow read: if true;
       allow create: if isAdmin() && isValidId(placeId) && isValidPlace(request.resource.data);
-      allow update: if isAdmin() && isValidId(placeId) && isValidPlace(request.resource.data);
+      allow update: if (isAdmin() && isValidId(placeId) && isValidPlace(request.resource.data)) ||
+                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount']) ||
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sharesCount']));
       allow delete: if isAdmin() && isValidId(placeId);
     }
 
-    // Articles collection: Public readable for readers, managed by admins
+    // Articles collection
     match /articles/{articleId} {
       allow read: if true;
       allow create: if isAdmin() && isValidId(articleId) && isValidArticle(request.resource.data);
       allow update: if isAdmin() && isValidId(articleId) && isValidArticle(request.resource.data);
       allow delete: if isAdmin() && isValidId(articleId);
+    }
+
+    // Analytics Events collection: Log pageviews and shares
+    match /analytics/{eventId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
     }
 
     // Admins collection: Only accessible by authenticated admins
