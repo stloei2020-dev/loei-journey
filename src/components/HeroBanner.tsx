@@ -48,33 +48,33 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           />
         )}
         
-        {/* Measured Rich Gradient Overlay for high-contrast legibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0A1A12] via-[#0C1E16]/75 to-[#0C1E16]/45" />
-        <div className="absolute inset-0 bg-radial from-transparent via-[#0C1E16]/30 to-[#0A1A12]/80" />
+        {/* Softened Radiant Gradient Overlay - allows golden sunrise & peaks to glow */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0A1A12]/90 via-[#0C1E16]/35 to-black/15" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0C1E16]/55 via-transparent to-black/25" />
       </div>
 
       <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
         
         {/* Curatorial Header / Volume Marker */}
-        <div className="flex flex-wrap items-center gap-2.5 text-xs tracking-widest uppercase text-amber-200/90 font-mono mb-4">
-          <span className="bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-sm text-white">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs tracking-widest uppercase text-amber-200 font-mono mb-4">
+          <span className="bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-white border border-white/20 shadow-md">
             VOL. 24 · LOEI TRAVEL MAGAZINE
           </span>
-          <span aria-hidden="true" className="text-white/40">·</span>
-          <span className="flex items-center gap-1.5 text-stone-200">
+          <span aria-hidden="true" className="text-white/60">·</span>
+          <span className="flex items-center gap-1.5 text-white bg-black/35 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-sm">
             <CloudSun className="w-3.5 h-3.5 text-amber-300" />
-            <span>อุณหภูมิยอดภู 16°C · ทะเลหมอกหนาแน่น</span>
+            <span className="drop-shadow-sm font-sans font-medium">อุณหภูมิยอดภู 16°C · ทะเลหมอกหนาแน่น</span>
           </span>
         </div>
 
-        {/* Display Headline with Natural Thai Phrasing & No Awkward Breaks */}
+        {/* Display Headline with Natural Thai Phrasing & High Contrast Drop Shadows */}
         <div className="max-w-3xl">
-          <h1 className="font-editorial text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FAF8F5] leading-[1.2] mb-5 text-balance">
+          <h1 className="font-editorial text-3xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-[#FAF8F5] leading-[1.2] mb-5 text-balance drop-shadow-[0_3px_12px_rgba(0,0,0,0.85)]">
             <span className="inline-block">ดินแดนแห่งทะเลภูเขา</span>{' '}
-            <span className="inline-block italic font-normal text-amber-200">สุดหนาวในสยาม</span>{' '}
+            <span className="inline-block italic font-normal text-amber-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">สุดหนาวในสยาม</span>{' '}
             <span className="inline-block">ดอกไม้งามสามฤดู</span>
           </h1>
-          <p className="text-sm sm:text-base lg:text-lg text-stone-200/95 font-light leading-relaxed max-w-2xl mb-8">
+          <p className="text-sm sm:text-base lg:text-lg text-white font-normal leading-relaxed max-w-2xl mb-8 drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]">
             ศูนย์รวมข้อมูลท่องเที่ยวจังหวัดเลยระดับมืออาชีพ คัดสรรสุดยอดที่พักริมสายหมอก 
             ร้านอาหารรสเด็ด คาเฟ่วิวธรรมชาติ สถานที่ท่องเที่ยวห้ามพลาด และธุรกิจบริการน่าสนใจทั้ง 14 อำเภอ
           </p>

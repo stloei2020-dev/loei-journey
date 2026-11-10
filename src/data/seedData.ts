@@ -128,7 +128,7 @@ export const DISTRICTS: DistrictInfo[] = [
   }
 ];
 
-export const INITIAL_PLACES: Place[] = [
+export const SAMPLE_PLACES: Place[] = [
   // --- ATTRACTIONS ---
   {
     id: 'phu-tok-chiang-khan',
@@ -588,6 +588,9 @@ export const INITIAL_PLACES: Place[] = [
     tags: ['เช่าเต็นท์ภูกระดึง', 'อุปกรณ์เดินป่า', 'ถุงนอน', 'แคมป์ปิ้ง']
   }
 ];
+
+// Active places start clean/empty as requested by user to test real data:
+export const INITIAL_PLACES: Place[] = [];
 
 export const INITIAL_ARTICLES: Article[] = [
   {

@@ -16,11 +16,12 @@ import {
   updateDoc,
   increment,
   deleteDoc,
-  getDocFromServer
+  getDocFromServer,
+  onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Place, Article, AnalyticsEvent, AnalyticsSummary } from '../types';
-import { INITIAL_PLACES, INITIAL_ARTICLES } from '../data/seedData';
+import { SAMPLE_PLACES, INITIAL_PLACES, INITIAL_ARTICLES } from '../data/seedData';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -30,9 +31,9 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'st.loei2020@gmail.com';
 
-const STORAGE_KEY_PLACES = 'loei_journey_places_v3';
-const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v3';
-const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v3';
+const STORAGE_KEY_PLACES = 'loei_journey_places_v4';
+const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v4';
+const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v4';
 
 export enum OperationType {
   CREATE = 'create',
@@ -123,6 +124,56 @@ function removeDeletedPlaceId(id: string) {
 }
 
 // Data fetching & persistence for Places
+export function subscribePlaces(callback: (places: Place[]) => void): () => void {
+  const pathForOnSnapshot = 'places';
+  const deletedIds = getDeletedPlaceIds();
+
+  const unsubscribe = onSnapshot(
+    collection(db, pathForOnSnapshot),
+    (snapshot) => {
+      const places: Place[] = [];
+      snapshot.forEach(docSnap => {
+        const id = docSnap.id;
+        if (!deletedIds.has(id)) {
+          places.push({ id, ...(docSnap.data() as Omit<Place, 'id'>) });
+        }
+      });
+
+      // Sort by newest updated or created first
+      places.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+
+      // Update local storage cache
+      try {
+        localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(places));
+      } catch (err) {
+        console.warn('Local storage cache update failed:', err);
+      }
+
+      callback(places);
+    },
+    (error) => {
+      console.warn('Real-time subscription notice, using cached places:', error);
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY_PLACES);
+        if (cached) {
+          callback(JSON.parse(cached));
+        } else {
+          callback([]);
+        }
+      } catch {
+        callback([]);
+      }
+      handleFirestoreError(error, OperationType.GET, pathForOnSnapshot);
+    }
+  );
+
+  return unsubscribe;
+}
+
 export async function getPlaces(): Promise<Place[]> {
   const deletedIds = getDeletedPlaceIds();
   const firestorePlacesMap = new Map<string, Place>();
@@ -146,14 +197,8 @@ export async function getPlaces(): Promise<Place[]> {
     }
   } catch {}
 
-  // Merge map: Initial Places -> Local Cache -> Firestore
+  // Merge map: Local Cache -> Firestore
   const mergedMap = new Map<string, Place>();
-  
-  INITIAL_PLACES.forEach(p => {
-    if (!deletedIds.has(p.id)) {
-      mergedMap.set(p.id, p);
-    }
-  });
 
   localCachePlaces.forEach(p => {
     if (!deletedIds.has(p.id)) {
@@ -168,7 +213,13 @@ export async function getPlaces(): Promise<Place[]> {
   });
 
   const result = Array.from(mergedMap.values());
-  // Keep local cache synced
+  // Sort: newest first
+  result.sort((a, b) => {
+    const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+
   try {
     localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(result));
   } catch {}
@@ -183,7 +234,7 @@ export async function savePlace(place: Place): Promise<void> {
   // Update local cache immediately
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLACES);
-    let list: Place[] = raw ? JSON.parse(raw) : [...INITIAL_PLACES];
+    let list: Place[] = raw ? JSON.parse(raw) : [];
     const idx = list.findIndex(p => p.id === place.id);
     if (idx >= 0) {
       list[idx] = place;
@@ -207,7 +258,6 @@ export async function savePlace(place: Place): Promise<void> {
     });
   } catch (error) {
     console.warn('Firestore write warning:', error);
-    // If not authenticated in firebase yet, local storage maintains it
   }
 }
 
@@ -233,6 +283,30 @@ export async function deletePlace(id: string): Promise<void> {
   } catch (error) {
     console.warn('Firestore delete warning:', error);
   }
+}
+
+export async function clearAllPlaces(): Promise<void> {
+  // Clear local caches
+  localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify([]));
+  localStorage.removeItem(STORAGE_KEY_DELETED);
+
+  // Clear Firestore places
+  try {
+    const snapshot = await getDocs(collection(db, 'places'));
+    const deletePromises = snapshot.docs.map(docSnap => deleteDoc(doc(db, 'places', docSnap.id)));
+    await Promise.all(deletePromises);
+  } catch (err) {
+    console.warn('Firestore clear places warning:', err);
+  }
+}
+
+export async function restoreSamplePlaces(): Promise<number> {
+  localStorage.removeItem(STORAGE_KEY_DELETED);
+  localStorage.removeItem(STORAGE_KEY_PLACES);
+  for (const place of SAMPLE_PLACES) {
+    await savePlace(place);
+  }
+  return SAMPLE_PLACES.length;
 }
 
 // Data fetching & persistence for Articles
@@ -412,14 +486,14 @@ export async function getAnalyticsSummary(allPlaces: Place[]): Promise<Analytics
 
 export async function seedDatabase(): Promise<{ placesCount: number; articlesCount: number }> {
   localStorage.removeItem(STORAGE_KEY_DELETED);
-  for (const place of INITIAL_PLACES) {
+  for (const place of SAMPLE_PLACES) {
     await savePlace(place);
   }
   for (const article of INITIAL_ARTICLES) {
     await saveArticle(article);
   }
   return {
-    placesCount: INITIAL_PLACES.length,
+    placesCount: SAMPLE_PLACES.length,
     articlesCount: INITIAL_ARTICLES.length
   };
 }

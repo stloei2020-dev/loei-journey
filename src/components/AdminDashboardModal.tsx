@@ -13,6 +13,8 @@ import {
   saveArticle,
   deleteArticle,
   seedDatabase,
+  clearAllPlaces,
+  restoreSamplePlaces,
   getAnalyticsSummary,
   BOOTSTRAPPED_ADMIN_EMAIL
 } from '../lib/firebase';
@@ -40,7 +42,8 @@ import {
   Eye,
   ExternalLink,
   Award,
-  Layers
+  Layers,
+  Compass
 } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 
@@ -141,29 +144,123 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
-  // Upload image files from device (converts to optimized Base64 data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'gallery' | 'standardLogo') => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  // Helper function to compress images on client using HTML5 Canvas to save storage & bandwidth
+  const compressImage = async (
+    file: File,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.78
+  ): Promise<{ dataUrl: string; originalSize: number; compressedSize: number }> => {
+    return new Promise((resolve) => {
+      // SVGs don't need raster compression
+      if (file.type === 'image/svg+xml') {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const str = (e.target?.result as string) || '';
+          resolve({ dataUrl: str, originalSize: file.size, compressedSize: file.size });
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
 
-    Array.from(files).forEach((file) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (target === 'gallery') {
-          setGalleryInputUrls((prev) => {
-            const updated = [...prev, result];
-            return updated.slice(0, 6); // Up to 5-6 images
-          });
-          if (!editingPlace?.imageUrl) {
-            setEditingPlace((prev) => prev ? { ...prev, imageUrl: result } : prev);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
           }
-        } else if (target === 'standardLogo') {
-          setCustomStandardLogoUrl(result);
-        }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            const raw = (e.target?.result as string) || '';
+            resolve({ dataUrl: raw, originalSize: file.size, compressedSize: file.size });
+            return;
+          }
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const approxBytes = Math.round((dataUrl.length * 3) / 4);
+          resolve({
+            dataUrl,
+            originalSize: file.size,
+            compressedSize: approxBytes
+          });
+        };
+        img.onerror = () => {
+          const raw = (e.target?.result as string) || '';
+          resolve({ dataUrl: raw, originalSize: file.size, compressedSize: file.size });
+        };
+        img.src = (e.target?.result as string) || '';
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  // Upload and compress image files from device
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'gallery' | 'standardLogo') => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setStatusMessage({ text: 'กำลังบีบอัดและประมวลผลรูปภาพ...' });
+    
+    try {
+      const isLogo = target === 'standardLogo';
+      const maxWidth = isLogo ? 400 : 1280;
+      const maxHeight = isLogo ? 400 : 1280;
+      const quality = isLogo ? 0.85 : 0.78;
+
+      let totalOrig = 0;
+      let totalComp = 0;
+      const newUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        const result = await compressImage(file, maxWidth, maxHeight, quality);
+        totalOrig += result.originalSize;
+        totalComp += result.compressedSize;
+        newUrls.push(result.dataUrl);
+      }
+
+      const origKb = Math.round(totalOrig / 1024);
+      const compKb = Math.round(totalComp / 1024);
+      const pctSaved = totalOrig > 0 ? Math.round(((totalOrig - totalComp) / totalOrig) * 100) : 0;
+
+      if (target === 'gallery') {
+        setGalleryInputUrls((prev) => {
+          const updated = [...prev, ...newUrls];
+          return updated.slice(0, 6); // Up to 5-6 preview images
+        });
+        if (!editingPlace?.imageUrl && newUrls.length > 0) {
+          setEditingPlace((prev) => prev ? { ...prev, imageUrl: newUrls[0] } : prev);
+        }
+        setStatusMessage({
+          text: `บีบอัดภาพสำเร็จ ${newUrls.length} รูป! ประหยัดพื้นที่: ${origKb}KB → ${compKb}KB (ลดลง ${pctSaved}%)`
+        });
+      } else if (target === 'standardLogo' && newUrls.length > 0) {
+        setCustomStandardLogoUrl(newUrls[0]);
+        setStatusMessage({
+          text: `บีบอัดโลโก้สำเร็จ! (${origKb}KB → ${compKb}KB)`
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage({ text: 'เกิดข้อผิดพลาดในการบีบอัดรูปภาพ: ' + (err.message || String(err)), isError: true });
+    }
   };
 
   // Add Preset Standard
@@ -320,6 +417,36 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setStatusMessage({ text: `ซิงค์ข้อมูลไปยัง Firestore เรียบร้อย (${res.placesCount} สถานที่, ${res.articlesCount} บทความ)` });
     } catch (err: any) {
       setStatusMessage({ text: 'เกิดข้อผิดพลาดในการซิงค์: ' + (err.message || String(err)), isError: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearAllPlaces = async () => {
+    if (!confirm('ยืนยันล้างสถานที่ตัวอย่างทั้งหมดออกหรือไม่? ระบบจะลบข้อมูลสถานที่ทั้งหมดเพื่อให้คุณเริ่มทดลองเพิ่มข้อมูลจริงได้ตั้งแต่ต้น')) return;
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    try {
+      await clearAllPlaces();
+      await onRefreshData();
+      setStatusMessage({ text: 'ล้างข้อมูลสถานที่ทั้งหมดเรียบร้อยแล้ว! ฐานข้อมูลว่างเปล่าพร้อมทดลองเพิ่มข้อมูลจริง' });
+    } catch (err: any) {
+      setStatusMessage({ text: 'เกิดข้อผิดพลาดในการล้างข้อมูล: ' + (err.message || String(err)), isError: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRestoreSamplePlaces = async () => {
+    if (!confirm('ต้องการกู้คืนข้อมูลสถานที่ตัวอย่างกลับมาหรือไม่?')) return;
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    try {
+      const count = await restoreSamplePlaces();
+      await onRefreshData();
+      setStatusMessage({ text: `กู้คืนสถานที่ตัวอย่างสำเร็จ (${count} สถานที่)` });
+    } catch (err: any) {
+      setStatusMessage({ text: 'เกิดข้อผิดพลาดในการกู้คืนข้อมูล: ' + (err.message || String(err)), isError: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -1000,14 +1127,29 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         ))}
                       </div>
 
-                      {/* Add new place button */}
-                      <button
-                        onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>เพิ่มสถานที่ใหม่</span>
-                      </button>
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {places.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllPlaces}
+                            disabled={isSubmitting}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-medium transition-colors shadow-2xs"
+                            title="ลบสถานที่ตัวอย่างทั้งหมดเพื่อเริ่มทดลองด้วยฐานข้อมูลว่าง"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>ล้างสถานที่ตัวอย่าง (Clean Slate)</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
+                          className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ เพิ่มสถานที่จริงใหม่</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Secondary search and district filter */}
@@ -1041,9 +1183,46 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                   {/* Places Table */}
                   <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs sm:text-sm">
-                        <thead className="bg-[#FAF8F5] border-b border-stone-200 text-stone-600 font-medium">
+                    {filteredPlacesList.length === 0 ? (
+                      <div className="p-12 text-center text-stone-500">
+                        <div className="w-12 h-12 bg-emerald-50 text-[#153326] rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Compass className="w-6 h-6" />
+                        </div>
+                        <h4 className="font-editorial text-lg font-bold text-stone-900">
+                          {places.length === 0
+                            ? 'ฐานข้อมูลสถานที่ว่างเปล่า พร้อมสำหรับทดลองเพิ่มข้อมูลจริง'
+                            : 'ไม่พบสถานที่ที่ตรงกับเงื่อนไขการค้นหา'}
+                        </h4>
+                        <p className="text-xs text-stone-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+                          {places.length === 0
+                            ? 'ระบบได้ล้างสถานที่ตัวอย่างออกเรียบร้อยแล้ว คุณสามารถเริ่มเพิ่มสถานที่จริง พร้อมภาพถ่าย 4-5 รูป และซิงค์ขึ้น Firestore ได้ทันที'
+                            : 'ลองเปลี่ยนคำค้นหาหรือตัวกรองอำเภอ/หมวดหมู่'}
+                        </p>
+                        <div className="mt-5 flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
+                            className="px-4 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-xs"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>+ เพิ่มสถานที่จริงใหม่</span>
+                          </button>
+                          {places.length === 0 && (
+                            <button
+                              type="button"
+                              onClick={handleRestoreSamplePlaces}
+                              className="px-4 py-2 border border-stone-300 hover:bg-stone-50 text-stone-700 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>กู้คืนข้อมูลตัวอย่าง (Restore Samples)</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs sm:text-sm">
+                          <thead className="bg-[#FAF8F5] border-b border-stone-200 text-stone-600 font-medium">
                           <tr>
                             <th className="p-3.5">รูป & ชื่อสถานที่</th>
                             <th className="p-3.5">หมวดหมู่</th>
@@ -1118,6 +1297,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </tbody>
                       </table>
                     </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1537,29 +1717,45 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
           {/* ================= TAB 4: SEED & SYNC ================= */}
           {activeTab === 'seed' && (
-            <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl border border-stone-200 text-center space-y-5 shadow-xs">
+            <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl border border-stone-200 text-center space-y-6 shadow-xs">
               <div className="w-12 h-12 bg-emerald-50 text-[#153326] rounded-full flex items-center justify-center mx-auto">
                 <Database className="w-6 h-6" />
               </div>
 
               <div>
                 <h3 className="font-editorial text-xl font-bold text-stone-900">
-                  ซิงค์ข้อมูลนิตยสารตั้งต้นสู่ Firebase Firestore
+                  จัดการฐานข้อมูล Firebase Firestore
                 </h3>
                 <p className="text-xs sm:text-sm text-stone-600 mt-2 leading-relaxed">
-                  กดปุ่มนี้เพื่ออัปโหลดสถานที่ท่องเที่ยวไอคอนิกของจังหวัดเลย พร้อมรูปภาพแกลเลอรี 4-5 รูป, 
-                  มาตรฐานที่ได้รับ, พิกัด Google Maps, สื่อออนไลน์ และบทความรีวิว เข้าสู่ฐานข้อมูลคลาวด์ Firestore
+                  คุณสามารถเลือกล้างสถานที่ตัวอย่างออกเพื่อเริ่มทดลองบันทึกข้อมูลและภาพถ่ายจริง หรือกู้คืนชุดข้อมูลตัวอย่างไอคอนิกของจังหวัดเลยได้ทุกเมื่อ
                 </p>
               </div>
 
-              <button
-                onClick={handleSeedDatabase}
-                disabled={isSubmitting}
-                className="w-full py-3 bg-[#153326] hover:bg-emerald-900 text-white rounded-xl text-sm font-medium transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
-                <span>{isSubmitting ? 'กำลังซิงค์ข้อมูล...' : 'เริ่มการซิงค์ข้อมูลสู่ Firestore'}</span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleClearAllPlaces}
+                  disabled={isSubmitting}
+                  className="py-3 px-4 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-2xs flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-600" />
+                  <span>ล้างข้อมูลตัวอย่าง (Clean Slate)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRestoreSamplePlaces}
+                  disabled={isSubmitting}
+                  className="py-3 px-4 bg-[#153326] hover:bg-emerald-900 text-white rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
+                  <span>กู้คืนข้อมูลตัวอย่าง (Restore)</span>
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-stone-100 text-[11px] text-stone-400">
+                สถานะฐานข้อมูลปัจจุบัน: มีสถานที่ในระบบ {places.length} แห่ง · บทความ {articles.length} เรื่อง
+              </div>
             </div>
           )}
 

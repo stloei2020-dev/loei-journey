@@ -32,7 +32,7 @@ service cloud.firestore {
              data.category is string && (data.category in ['stay', 'restaurant', 'cafe', 'attraction', 'souvenir', 'service']) &&
              data.district is string && data.district.size() > 0 && data.district.size() <= 80 &&
              data.description is string && data.description.size() > 0 && data.description.size() <= 3000 &&
-             data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500;
+             data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500000;
     }
 
     function isValidArticle(data) {
@@ -40,7 +40,7 @@ service cloud.firestore {
              data.excerpt is string && data.excerpt.size() > 0 && data.excerpt.size() <= 500 &&
              data.content is string && data.content.size() > 0 && data.content.size() <= 10000 &&
              data.author is string && data.author.size() > 0 && data.author.size() <= 100 &&
-             data.coverImage is string && data.coverImage.size() > 0 && data.coverImage.size() <= 500;
+             data.coverImage is string && data.coverImage.size() > 0 && data.coverImage.size() <= 500000;
     }
 
     // Places collection: Public readable, managed by admins or public increment of views/shares

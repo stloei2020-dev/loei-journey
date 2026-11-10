@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Place } from '../types';
-import { Star, MapPin, ArrowUpRight, Compass, Award } from 'lucide-react';
+import { Star, MapPin, ArrowUpRight, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PlaceCardProps {
   place: Place;
@@ -9,6 +9,34 @@ interface PlaceCardProps {
 
 export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
   const [imageError, setImageError] = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  // Combine gallery and main image for preview slider
+  const rawImages = [
+    place.imageUrl,
+    ...(place.gallery || []).filter(img => img && img !== place.imageUrl)
+  ].filter(Boolean);
+
+  const images = rawImages.length > 0 ? rawImages : [place.imageUrl];
+  const activeImage = images[currentIdx] || place.imageUrl;
+
+  const handlePrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImageError(false);
+    setCurrentIdx((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImageError(false);
+    setCurrentIdx((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleDotClick = (e: React.MouseEvent, idx: number) => {
+    e.stopPropagation();
+    setImageError(false);
+    setCurrentIdx(idx);
+  };
 
   const categoryLabels: Record<string, string> = {
     stay: 'ที่พัก & โรงแรม',
@@ -24,16 +52,17 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
       onClick={() => onSelect(place)}
       className="group bg-white rounded-xl overflow-hidden border border-stone-200/80 hover:border-stone-300 transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col h-full"
     >
-      {/* Visual Image container with 4:3 Aspect Ratio and Lazy Loading */}
-      <div className="relative aspect-[4/3] bg-stone-100 overflow-hidden">
+      {/* Visual Image container with 4:3 Aspect Ratio and Slide Preview */}
+      <div className="relative aspect-[4/3] bg-stone-100 overflow-hidden select-none">
         {!imageError ? (
           <img
-            src={place.imageUrl}
-            alt={place.name}
+            key={activeImage}
+            src={activeImage}
+            alt={`${place.name} รูปที่ ${currentIdx + 1}`}
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setImageError(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+            className="w-full h-full object-cover group-hover:scale-103 transition-all duration-500 ease-out"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200 text-stone-400 p-4">
@@ -42,14 +71,58 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
           </div>
         )}
 
+        {/* Image Slider Navigation Controls (when multiple preview images exist) */}
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={handlePrev}
+              aria-label="รูปก่อนหน้า"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center backdrop-blur-xs shadow-md transition-all opacity-80 sm:opacity-0 sm:group-hover:opacity-100 z-10"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              aria-label="รูปถัดไป"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center backdrop-blur-xs shadow-md transition-all opacity-80 sm:opacity-0 sm:group-hover:opacity-100 z-10"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Slider Dot Indicators & Image Counter */}
+            <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/55 backdrop-blur-md px-2 py-0.5 rounded-full z-10">
+              <span className="text-[10px] font-mono text-white/90">
+                {currentIdx + 1}/{images.length}
+              </span>
+              <div className="flex items-center gap-1 ml-1">
+                {images.map((_, dotIdx) => (
+                  <button
+                    key={dotIdx}
+                    type="button"
+                    onClick={(e) => handleDotClick(e, dotIdx)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      dotIdx === currentIdx
+                        ? 'w-3 bg-amber-400'
+                        : 'w-1.5 bg-white/50 hover:bg-white/80'
+                    }`}
+                    aria-label={`ไปยังรูปภาพที่ ${dotIdx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Minimal Editorial Category Stamp on top right */}
-        <div className="absolute top-3 right-3 bg-stone-900/85 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm shadow-xs">
+        <div className="absolute top-2.5 right-2.5 bg-stone-900/85 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm shadow-xs z-10">
           {categoryLabels[place.category] || place.category}
         </div>
 
         {/* Standard certification logo badge on bottom left of image */}
         {place.standards && place.standards.length > 0 && (
-          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-white/95 backdrop-blur-xs rounded-full px-2.5 py-0.5 border border-stone-200/80 shadow-xs">
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-white/95 backdrop-blur-xs rounded-full px-2.5 py-0.5 border border-stone-200/80 shadow-xs z-10">
             <img
               src={place.standards[0].logoUrl}
               alt=""

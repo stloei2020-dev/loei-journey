@@ -41,8 +41,8 @@
         },
         "imageUrl": {
           "type": "string",
-          "description": "Main cover image URL or local asset path",
-          "maxLength": 500
+          "description": "Main cover image URL, local asset path, or compressed data URL",
+          "maxLength": 500000
         },
         "gallery": {
           "type": "array",
@@ -169,8 +169,8 @@
         },
         "coverImage": {
           "type": "string",
-          "description": "Header image URL",
-          "maxLength": 500
+          "description": "Header image URL or compressed data URL",
+          "maxLength": 500000
         },
         "isFeatured": {
           "type": "boolean",
