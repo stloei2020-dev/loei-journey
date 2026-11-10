@@ -1,0 +1,6 @@
+{
+  "name": "LOEI JOURNEY",
+  "description": "LOEI JOURNEY นิตยสารท่องเที่ยวระดับพรีเมียม แนะนำที่พัก โรงแรม คาเฟ่ ร้านอาหารเด็ด สถานที่ท่องเที่ยว และของฝากในจังหวัดเลย ประเทศไทย",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
