@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Place, Article, PlaceCategory } from './types';
+import { Place, Article, PlaceCategory, PriceFilter } from './types';
 import {
   getPlaces,
   getArticles,
@@ -21,7 +21,6 @@ import { CategoryFilterBar } from './components/CategoryFilterBar';
 import { FeaturedWeeklySection } from './components/FeaturedWeeklySection';
 import { PlaceCard } from './components/PlaceCard';
 import { PlaceDetailModal } from './components/PlaceDetailModal';
-import { DistrictExplorer } from './components/DistrictExplorer';
 import { ArticlesSection } from './components/ArticlesSection';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { Footer } from './components/Footer';
@@ -33,7 +32,10 @@ import {
   Sparkles,
   Mountain,
   Search,
-  ArrowRight
+  ArrowRight,
+  Briefcase,
+  Store,
+  Layers
 } from 'lucide-react';
 
 export default function App() {
@@ -47,6 +49,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | 'all'>('all');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>('all');
+  const [hasStandardsOnly, setHasStandardsOnly] = useState<boolean>(false);
 
   // Modals
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
@@ -84,6 +88,9 @@ export default function App() {
   const handleSelectTab = (tab: string) => {
     setCurrentTab(tab);
     setSearchQuery('');
+    setPriceFilter('all');
+    setHasStandardsOnly(false);
+
     if (tab === 'home') {
       setSelectedCategory('all');
       setSelectedDistrict('all');
@@ -93,9 +100,8 @@ export default function App() {
       setSelectedCategory('restaurant');
     } else if (tab === 'attractions') {
       setSelectedCategory('attraction');
-    } else if (tab === 'districts') {
-      const el = document.getElementById('districts-section');
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else if (tab === 'services') {
+      setSelectedCategory('service');
     } else if (tab === 'articles') {
       const el = document.getElementById('articles-section');
       if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -113,6 +119,30 @@ export default function App() {
     setSelectedCategory('all');
     setSelectedDistrict('all');
     setSearchQuery('');
+    setPriceFilter('all');
+    setHasStandardsOnly(false);
+  };
+
+  // Helper for price classification
+  const matchesPrice = (priceStr?: string, filter?: PriceFilter): boolean => {
+    if (!filter || filter === 'all') return true;
+    if (!priceStr) return false;
+    const lower = priceStr.toLowerCase();
+    
+    // Extract first number in priceRange
+    const numMatch = lower.replace(/,/g, '').match(/\d+/);
+    const num = numMatch ? parseInt(numMatch[0], 10) : 0;
+
+    if (filter === 'budget') {
+      return lower.includes('ฟรี') || lower.includes('free') || num < 300;
+    }
+    if (filter === 'moderate') {
+      return (num >= 300 && num <= 1000) || lower.includes('300') || lower.includes('600') || lower.includes('800');
+    }
+    if (filter === 'luxury') {
+      return num > 1000 || lower.includes('1,500') || lower.includes('2,200') || lower.includes('1,800');
+    }
+    return true;
   };
 
   // Filtered places calculation
@@ -137,7 +167,17 @@ export default function App() {
         return false;
       }
 
-      // Search query filter
+      // Price filter
+      if (priceFilter !== 'all' && !matchesPrice(p.priceRange, priceFilter)) {
+        return false;
+      }
+
+      // Standards filter
+      if (hasStandardsOnly && (!p.standards || p.standards.length === 0)) {
+        return false;
+      }
+
+      // Search query filter (supports Thai & English)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = p.name.toLowerCase().includes(q);
@@ -145,24 +185,26 @@ export default function App() {
         const matchesDistrict = p.district.toLowerCase().includes(q);
         const matchesDesc = p.description.toLowerCase().includes(q);
         const matchesTags = p.tags ? p.tags.some((t) => t.toLowerCase().includes(q)) : false;
-        return matchesName || matchesEn || matchesDistrict || matchesDesc || matchesTags;
+        const matchesCategory = p.category.toLowerCase().includes(q);
+        return matchesName || matchesEn || matchesDistrict || matchesDesc || matchesTags || matchesCategory;
       }
 
       return true;
     });
-  }, [places, selectedCategory, selectedDistrict, searchQuery, currentTab]);
+  }, [places, selectedCategory, selectedDistrict, priceFilter, hasStandardsOnly, searchQuery, currentTab]);
 
   // Featured place of the week
   const featuredPlace = useMemo(() => {
-    return places.find((p) => p.id === 'phu-tok-chiang-khan') || places[0];
+    return places.find((p) => p.isFeatured && p.id === 'phu-tok-chiang-khan') || places[0];
   }, [places]);
 
   // Curated lists for home tab
   const stays = useMemo(() => places.filter((p) => p.category === 'stay'), [places]);
   const diningAndCafes = useMemo(() => places.filter((p) => p.category === 'restaurant' || p.category === 'cafe'), [places]);
   const attractions = useMemo(() => places.filter((p) => p.category === 'attraction'), [places]);
+  const services = useMemo(() => places.filter((p) => p.category === 'service'), [places]);
 
-  const isFiltered = selectedCategory !== 'all' || selectedDistrict !== 'all' || searchQuery.trim().length > 0;
+  const isFiltered = selectedCategory !== 'all' || selectedDistrict !== 'all' || searchQuery.trim().length > 0 || priceFilter !== 'all' || hasStandardsOnly;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-900 selection:bg-[#153326] selection:text-white">
@@ -190,6 +232,10 @@ export default function App() {
               const el = document.getElementById('catalog-section');
               if (el) el.scrollIntoView({ behavior: 'smooth' });
             }}
+            priceFilter={priceFilter}
+            onSelectPriceFilter={setPriceFilter}
+            hasStandardsOnly={hasStandardsOnly}
+            onToggleStandardsOnly={() => setHasStandardsOnly(!hasStandardsOnly)}
           />
         )}
 
@@ -203,6 +249,10 @@ export default function App() {
             }}
             selectedDistrict={selectedDistrict}
             onSelectDistrict={(dist) => setSelectedDistrict(dist)}
+            priceFilter={priceFilter}
+            onSelectPriceFilter={setPriceFilter}
+            hasStandardsOnly={hasStandardsOnly}
+            onToggleStandardsOnly={() => setHasStandardsOnly(!hasStandardsOnly)}
             totalCount={filteredPlaces.length}
             onResetFilters={handleResetFilters}
             isFiltered={isFiltered}
@@ -224,12 +274,14 @@ export default function App() {
             <div className="mb-8 pb-4 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900">
-                  ผลการค้นหาและตัวกรอง
+                  ผลการค้นหาและตัวกรอง ({filteredPlaces.length} รายการ)
                 </h2>
-                <div className="text-xs text-stone-500 mt-1 flex items-center gap-2">
-                  {searchQuery && <span>คำค้นหา: "{searchQuery}"</span>}
-                  {selectedCategory !== 'all' && <span>หมวดหมู่: {selectedCategory}</span>}
-                  {selectedDistrict !== 'all' && <span>พื้นที่: {selectedDistrict}</span>}
+                <div className="text-xs text-stone-500 mt-1 flex flex-wrap items-center gap-2">
+                  {searchQuery && <span className="bg-stone-100 px-2 py-0.5 rounded">คำค้นหา: "{searchQuery}"</span>}
+                  {selectedCategory !== 'all' && <span className="bg-stone-100 px-2 py-0.5 rounded">หมวดหมู่: {selectedCategory}</span>}
+                  {selectedDistrict !== 'all' && <span className="bg-stone-100 px-2 py-0.5 rounded">พื้นที่: {selectedDistrict}</span>}
+                  {priceFilter !== 'all' && <span className="bg-stone-100 px-2 py-0.5 rounded">ราคา: {priceFilter}</span>}
+                  {hasStandardsOnly && <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded">มีตรามาตรฐาน</span>}
                 </div>
               </div>
 
@@ -242,7 +294,7 @@ export default function App() {
             </div>
           )}
 
-          {/* If filtering or in non-home tab, render simple grid */}
+          {/* If filtering or in non-home tab, render filtered grid */}
           {isFiltered || currentTab !== 'home' ? (
             <div>
               {filteredPlaces.length > 0 ? (
@@ -261,10 +313,10 @@ export default function App() {
                     <Search className="w-6 h-6" />
                   </div>
                   <h3 className="font-editorial text-xl font-bold text-stone-800">
-                    ไม่พบสถานที่ตามเงื่อนไขที่เลือก
+                    ไม่พบสถานที่หรือบริการตามเงื่อนไขที่เลือก
                   </h3>
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    ลองปรับเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่นเพื่อค้นหาที่พัก ร้านอาหาร และสถานที่ท่องเที่ยวในจังหวัดเลย
+                    ลองปรับเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่อื่นเพื่อค้นหาที่พัก ร้านอาหาร คาเฟ่ และธุรกิจบริการในจังหวัดเลย
                   </p>
                   <button
                     onClick={handleResetFilters}
@@ -279,7 +331,7 @@ export default function App() {
             /* Curated Magazine Layout for Homepage */
             <div className="space-y-16">
               
-              {/* SECTION: ACCOMMODATIONS (ที่พักยอดนิยม) */}
+              {/* SECTION 1: ACCOMMODATIONS (ที่พักยอดนิยม) */}
               <div>
                 <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
                   <div>
@@ -314,7 +366,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECTION: DINING & CAFES (ร้านเด็ดและคาเฟ่) */}
+              {/* SECTION 2: DINING & CAFES (ร้านเด็ดและคาเฟ่) */}
               <div>
                 <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
                   <div>
@@ -349,7 +401,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECTION: ATTRACTIONS (สถานที่ท่องเที่ยวห้ามพลาด) */}
+              {/* SECTION 3: ATTRACTIONS (สถานที่ท่องเที่ยวห้ามพลาด) */}
               <div>
                 <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
                   <div>
@@ -384,22 +436,43 @@ export default function App() {
                 </div>
               </div>
 
+              {/* SECTION 4: ธุรกิจบริการน่าสนใจ (FEATURED SERVICES & LOCAL BUSINESSES) */}
+              <div id="services-section">
+                <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-emerald-800 font-mono mb-1">
+                      <Briefcase className="w-3.5 h-3.5" />
+                      <span>LOCAL BUSINESSES & SERVICES</span>
+                    </div>
+                    <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900">
+                      ธุรกิจบริการน่าสนใจในจังหวัดเลย
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedCategory('service');
+                      window.scrollTo({ top: 300, behavior: 'smooth' });
+                    }}
+                    className="text-xs font-medium text-[#153326] hover:underline flex items-center gap-1 shrink-0"
+                  >
+                    <span>ดูบริการทั้งหมด ({services.length})</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                  {services.map((place) => (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      onSelect={(p) => setSelectedPlace(p)}
+                    />
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
-        </div>
-
-        {/* 14 Districts Explorer Section */}
-        <div id="districts-section">
-          <DistrictExplorer
-            selectedDistrict={selectedDistrict}
-            onSelectDistrict={(districtName) => {
-              setSelectedDistrict(districtName);
-              setSelectedCategory('all');
-              setCurrentTab('home');
-              const el = document.getElementById('catalog-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-          />
         </div>
 
         {/* Editorial Articles & Travel Guides */}

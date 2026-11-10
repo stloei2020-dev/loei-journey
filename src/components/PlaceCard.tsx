@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Place } from '../types';
-import { Star, MapPin, ArrowUpRight, Compass, Share2, Award } from 'lucide-react';
+import { Star, MapPin, ArrowUpRight, Compass, Award } from 'lucide-react';
 
 interface PlaceCardProps {
   place: Place;
@@ -15,7 +15,8 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
     restaurant: 'ร้านอาหาร',
     cafe: 'คาเฟ่ & กาแฟ',
     attraction: 'สถานที่ท่องเที่ยว',
-    souvenir: 'ของฝากเมืองเลย'
+    souvenir: 'ของฝากเมืองเลย',
+    service: 'ธุรกิจบริการน่าสนใจ'
   };
 
   return (
@@ -23,35 +24,36 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
       onClick={() => onSelect(place)}
       className="group bg-white rounded-xl overflow-hidden border border-stone-200/80 hover:border-stone-300 transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col h-full"
     >
-      {/* Visual Image container with 4:3 Aspect Ratio */}
+      {/* Visual Image container with 4:3 Aspect Ratio and Lazy Loading */}
       <div className="relative aspect-[4/3] bg-stone-100 overflow-hidden">
         {!imageError ? (
           <img
             src={place.imageUrl}
             alt={place.name}
+            loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setImageError(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-stone-100 to-stone-200 text-stone-400 p-4">
-            <Compass className="w-8 h-8 mb-1.5 opacity-60" />
-            <span className="text-xs font-serif">{place.name}</span>
+            <Compass className="w-8 h-8 mb-1.5 opacity-60 text-emerald-800" />
+            <span className="text-xs font-serif text-stone-600 text-center">{place.name}</span>
           </div>
         )}
 
         {/* Minimal Editorial Category Stamp on top right */}
-        <div className="absolute top-3 right-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm">
+        <div className="absolute top-3 right-3 bg-stone-900/85 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm shadow-xs">
           {categoryLabels[place.category] || place.category}
         </div>
 
         {/* Standard certification logo badge on bottom left of image */}
         {place.standards && place.standards.length > 0 && (
-          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 bg-white/90 backdrop-blur-xs rounded-full px-2 py-0.5 border border-stone-200/70 shadow-2xs">
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 bg-white/95 backdrop-blur-xs rounded-full px-2.5 py-0.5 border border-stone-200/80 shadow-xs">
             <img
               src={place.standards[0].logoUrl}
-              alt={place.standards[0].name}
-              className="w-3.5 h-3.5 object-contain"
+              alt=""
+              className="w-4 h-4 object-contain"
             />
             <span className="text-[10px] font-medium text-stone-800">
               {place.standards[0].name.split(' ')[0]}

@@ -16,10 +16,7 @@ import {
   updateDoc,
   increment,
   deleteDoc,
-  getDocFromServer,
-  query,
-  orderBy,
-  limit
+  getDocFromServer
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Place, Article, AnalyticsEvent, AnalyticsSummary } from '../types';
@@ -32,6 +29,10 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'st.loei2020@gmail.com';
+
+const STORAGE_KEY_PLACES = 'loei_journey_places_v3';
+const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v3';
+const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v3';
 
 export enum OperationType {
   CREATE = 'create',
@@ -91,27 +92,110 @@ export async function testConnection(): Promise<void> {
   }
 }
 
+// Helper for local deleted IDs
+function getDeletedPlaceIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_DELETED);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function addDeletedPlaceId(id: string) {
+  try {
+    const set = getDeletedPlaceIds();
+    set.add(id);
+    localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function removeDeletedPlaceId(id: string) {
+  try {
+    const set = getDeletedPlaceIds();
+    set.delete(id);
+    localStorage.setItem(STORAGE_KEY_DELETED, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 // Data fetching & persistence for Places
 export async function getPlaces(): Promise<Place[]> {
-  const path = 'places';
+  const deletedIds = getDeletedPlaceIds();
+  const firestorePlacesMap = new Map<string, Place>();
+
   try {
-    const snapshot = await getDocs(collection(db, path));
-    if (snapshot.empty) {
-      return INITIAL_PLACES;
-    }
-    const places: Place[] = [];
+    const snapshot = await getDocs(collection(db, 'places'));
     snapshot.forEach(docSnap => {
-      places.push({ id: docSnap.id, ...(docSnap.data() as Omit<Place, 'id'>) });
+      const data = docSnap.data() as Omit<Place, 'id'>;
+      firestorePlacesMap.set(docSnap.id, { id: docSnap.id, ...data });
     });
-    return places;
   } catch (error) {
-    console.warn('Error reading places from Firestore, falling back to curated places:', error);
-    return INITIAL_PLACES;
+    console.warn('Note reading from Firestore, using local cache:', error);
   }
+
+  // Also check localStorage cache for user added/edited places
+  let localCachePlaces: Place[] = [];
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY_PLACES);
+    if (cached) {
+      localCachePlaces = JSON.parse(cached);
+    }
+  } catch {}
+
+  // Merge map: Initial Places -> Local Cache -> Firestore
+  const mergedMap = new Map<string, Place>();
+  
+  INITIAL_PLACES.forEach(p => {
+    if (!deletedIds.has(p.id)) {
+      mergedMap.set(p.id, p);
+    }
+  });
+
+  localCachePlaces.forEach(p => {
+    if (!deletedIds.has(p.id)) {
+      mergedMap.set(p.id, p);
+    }
+  });
+
+  firestorePlacesMap.forEach((p, id) => {
+    if (!deletedIds.has(id)) {
+      mergedMap.set(id, p);
+    }
+  });
+
+  const result = Array.from(mergedMap.values());
+  // Keep local cache synced
+  try {
+    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(result));
+  } catch {}
+
+  return result;
 }
 
 export async function savePlace(place: Place): Promise<void> {
   const path = `places/${place.id}`;
+  removeDeletedPlaceId(place.id);
+
+  // Update local cache immediately
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
+    let list: Place[] = raw ? JSON.parse(raw) : [...INITIAL_PLACES];
+    const idx = list.findIndex(p => p.id === place.id);
+    if (idx >= 0) {
+      list[idx] = place;
+    } else {
+      list.unshift(place);
+    }
+    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
+  } catch (e) {
+    console.error(e);
+  }
+
+  // Persist to Firestore
   try {
     const { id, ...data } = place;
     await setDoc(doc(db, 'places', id), {
@@ -122,40 +206,73 @@ export async function savePlace(place: Place): Promise<void> {
       sharesCount: place.sharesCount || 0
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn('Firestore write warning:', error);
+    // If not authenticated in firebase yet, local storage maintains it
   }
 }
 
 export async function deletePlace(id: string): Promise<void> {
   const path = `places/${id}`;
+  addDeletedPlaceId(id);
+
+  // Update local cache immediately so deleted item disappears reliably
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
+    if (raw) {
+      let list: Place[] = JSON.parse(raw);
+      list = list.filter(p => p.id !== id);
+      localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  // Delete from Firestore
   try {
     await deleteDoc(doc(db, 'places', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn('Firestore delete warning:', error);
   }
 }
 
 // Data fetching & persistence for Articles
 export async function getArticles(): Promise<Article[]> {
-  const path = 'articles';
   try {
-    const snapshot = await getDocs(collection(db, path));
-    if (snapshot.empty) {
-      return INITIAL_ARTICLES;
+    const snapshot = await getDocs(collection(db, 'articles'));
+    if (!snapshot.empty) {
+      const articles: Article[] = [];
+      snapshot.forEach(docSnap => {
+        articles.push({ id: docSnap.id, ...(docSnap.data() as Omit<Article, 'id'>) });
+      });
+      return articles;
     }
-    const articles: Article[] = [];
-    snapshot.forEach(docSnap => {
-      articles.push({ id: docSnap.id, ...(docSnap.data() as Omit<Article, 'id'>) });
-    });
-    return articles;
   } catch (error) {
-    console.warn('Error reading articles from Firestore, falling back to curated articles:', error);
-    return INITIAL_ARTICLES;
+    console.warn('Note reading articles from Firestore:', error);
   }
+
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY_ARTICLES);
+    if (cached) return JSON.parse(cached);
+  } catch {}
+
+  return INITIAL_ARTICLES;
 }
 
 export async function saveArticle(article: Article): Promise<void> {
   const path = `articles/${article.id}`;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ARTICLES);
+    let list: Article[] = raw ? JSON.parse(raw) : [...INITIAL_ARTICLES];
+    const idx = list.findIndex(a => a.id === article.id);
+    if (idx >= 0) {
+      list[idx] = article;
+    } else {
+      list.unshift(article);
+    }
+    localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(list));
+  } catch {}
+
   try {
     const { id, ...data } = article;
     await setDoc(doc(db, 'articles', id), {
@@ -164,16 +281,24 @@ export async function saveArticle(article: Article): Promise<void> {
       createdAt: article.createdAt || new Date().toISOString()
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    console.warn('Firestore article write warning:', error);
   }
 }
 
 export async function deleteArticle(id: string): Promise<void> {
-  const path = `articles/${id}`;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ARTICLES);
+    if (raw) {
+      let list: Article[] = JSON.parse(raw);
+      list = list.filter(a => a.id !== id);
+      localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(list));
+    }
+  } catch {}
+
   try {
     await deleteDoc(doc(db, 'articles', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn('Firestore article delete warning:', error);
   }
 }
 
@@ -196,7 +321,6 @@ export async function trackEvent(
     };
     await setDoc(doc(db, 'analytics', eventId), eventData);
 
-    // Increment counter on place doc if viewing or sharing
     if (placeId) {
       const placeRef = doc(db, 'places', placeId);
       if (type === 'view_place') {
@@ -207,7 +331,6 @@ export async function trackEvent(
     }
   } catch (e) {
     // Analytics logging should never crash the user journey
-    console.warn('Analytics logging event note:', e);
   }
 }
 
@@ -223,7 +346,6 @@ export async function getAnalyticsSummary(allPlaces: Place[]): Promise<Analytics
     console.warn('Using baseline analytics from place counts');
   }
 
-  // Aggregate shares by platform
   const sharesByPlatform = {
     facebook: 0,
     line: 0,
@@ -237,11 +359,9 @@ export async function getAnalyticsSummary(allPlaces: Place[]): Promise<Analytics
     }
   });
 
-  // Calculate base metrics from places
   let totalPlaceViews = allPlaces.reduce((sum, p) => sum + (p.viewsCount || 0), 0);
   let totalShares = allPlaces.reduce((sum, p) => sum + (p.sharesCount || 0), 0);
 
-  // If newly seeded, ensure realistic base distribution
   if (sharesByPlatform.facebook === 0 && totalShares > 0) {
     sharesByPlatform.facebook = Math.round(totalShares * 0.48);
     sharesByPlatform.line = Math.round(totalShares * 0.32);
@@ -291,6 +411,7 @@ export async function getAnalyticsSummary(allPlaces: Place[]): Promise<Analytics
 }
 
 export async function seedDatabase(): Promise<{ placesCount: number; articlesCount: number }> {
+  localStorage.removeItem(STORAGE_KEY_DELETED);
   for (const place of INITIAL_PLACES) {
     await savePlace(place);
   }

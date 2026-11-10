@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'stay', label: 'ที่พักและโรงแรม' },
     { id: 'dining', label: 'ร้านอาหาร & คาเฟ่' },
     { id: 'attractions', label: 'สถานที่ท่องเที่ยว' },
-    { id: 'districts', label: 'เที่ยวตามอำเภอ' },
+    { id: 'services', label: 'ธุรกิจบริการน่าสนใจ' },
     { id: 'articles', label: 'บทความและรีวิว' },
   ];
 

@@ -551,6 +551,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             <option value="restaurant">ร้านอาหาร</option>
                             <option value="cafe">คาเฟ่ & กาแฟ</option>
                             <option value="attraction">สถานที่ท่องเที่ยว</option>
+                            <option value="service">ธุรกิจบริการน่าสนใจ</option>
                             <option value="souvenir">ของฝากเมืองเลย</option>
                           </select>
                         </div>
@@ -982,6 +983,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           { id: 'restaurant', label: 'ร้านอาหาร' },
                           { id: 'cafe', label: 'คาเฟ่' },
                           { id: 'attraction', label: 'สถานที่เที่ยว' },
+                          { id: 'service', label: 'ธุรกิจบริการ' },
                           { id: 'souvenir', label: 'ของฝาก' },
                         ].map((cat) => (
                           <button

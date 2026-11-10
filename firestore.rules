@@ -29,7 +29,7 @@ service cloud.firestore {
 
     function isValidPlace(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
-             data.category is string && (data.category in ['stay', 'restaurant', 'cafe', 'attraction', 'souvenir']) &&
+             data.category is string && (data.category in ['stay', 'restaurant', 'cafe', 'attraction', 'souvenir', 'service']) &&
              data.district is string && data.district.size() > 0 && data.district.size() <= 80 &&
              data.description is string && data.description.size() > 0 && data.description.size() <= 3000 &&
              data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500;

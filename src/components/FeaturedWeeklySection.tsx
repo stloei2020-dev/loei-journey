@@ -82,7 +82,11 @@ export const FeaturedWeeklySection: React.FC<FeaturedWeeklySectionProps> = ({ pl
               <img
                 src={allImages[currentImageIndex] || place.imageUrl}
                 alt={`${place.name} ภาพที่ ${currentImageIndex + 1}`}
+                loading="lazy"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/images/loei_hero_sea_of_mist_1794278412692.jpg';
+                }}
                 className="w-full h-full object-cover transition-all duration-500"
               />
 

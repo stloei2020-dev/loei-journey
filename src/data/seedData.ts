@@ -1,11 +1,17 @@
 import { Place, Article, DistrictInfo } from '../types';
 import { PRESET_STANDARDS } from './standardBadges';
 
-export const HERO_IMAGE = '/src/assets/images/loei_hero_sea_of_mist_1794278412692.jpg';
-export const CHIANG_KHAN_IMAGE = '/src/assets/images/chiang_khan_walking_street_1794278414260.jpg';
-export const PHU_KRADUENG_IMAGE = '/src/assets/images/phu_kradueng_cliff_pine_1794278415253.jpg';
-export const PHU_PA_PO_IMAGE = '/src/assets/images/phu_pa_po_mountain_1794278416294.jpg';
-export const CUISINE_CAFE_IMAGE = '/src/assets/images/loei_cuisine_and_cafe_1794278415525.jpg';
+import heroImg from '../assets/images/loei_hero_sea_of_mist_1794278412692.jpg';
+import chiangKhanImg from '../assets/images/chiang_khan_walking_street_1794278414260.jpg';
+import phuKraduengImg from '../assets/images/phu_kradueng_cliff_pine_1794278415253.jpg';
+import phuPaPoImg from '../assets/images/phu_pa_po_mountain_1794278416294.jpg';
+import cuisineCafeImg from '../assets/images/loei_cuisine_and_cafe_1794278415525.jpg';
+
+export const HERO_IMAGE = heroImg || '/images/loei_hero_sea_of_mist_1794278412692.jpg';
+export const CHIANG_KHAN_IMAGE = chiangKhanImg || '/images/chiang_khan_walking_street_1794278414260.jpg';
+export const PHU_KRADUENG_IMAGE = phuKraduengImg || '/images/phu_kradueng_cliff_pine_1794278415253.jpg';
+export const PHU_PA_PO_IMAGE = phuPaPoImg || '/images/phu_pa_po_mountain_1794278416294.jpg';
+export const CUISINE_CAFE_IMAGE = cuisineCafeImg || '/images/loei_cuisine_and_cafe_1794278415525.jpg';
 
 export const DISTRICTS: DistrictInfo[] = [
   {
@@ -141,13 +147,13 @@ export const INITIAL_PLACES: Place[] = [
       CUISINE_CAFE_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[0], // SHA Extra Plus
-      PRESET_STANDARDS[4]  // มาตรฐานการท่องเที่ยวไทย
+      PRESET_STANDARDS[0],
+      PRESET_STANDARDS[4]
     ],
     address: 'ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254 (ทต.เชียงคาน)',
-    priceRange: 'ค่ารถสองแถวขึ้น-ลง 25-40 บาท/คน',
-    openingHours: 'เปิดให้บริการทุกวัน 05:00 - 17:30 น. (ช่วงชมหมอก 05:30 - 08:30 น.)',
+    priceRange: '25 - 40 บาท/คน',
+    openingHours: 'เปิดทุกวัน 05:00 - 17:30 น. (ชมหมอก 05:30 - 08:30 น.)',
     googleMapsUrl: 'https://maps.google.com/?q=Phu+Tok+Chiang+Khan+Loei',
     facebookUrl: 'https://facebook.com/phutokchiangkhan.official',
     lineUrl: 'https://line.me/R/ti/p/@chiangkhan',
@@ -174,8 +180,8 @@ export const INITIAL_PLACES: Place[] = [
       PHU_PA_PO_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[0], // SHA Extra Plus
-      PRESET_STANDARDS[2]  // OTOP 5 ดาว
+      PRESET_STANDARDS[0],
+      PRESET_STANDARDS[2]
     ],
     address: 'ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254',
@@ -206,13 +212,13 @@ export const INITIAL_PLACES: Place[] = [
       CHIANG_KHAN_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[1], // Green Hotel / Green Park
-      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+      PRESET_STANDARDS[1],
+      PRESET_STANDARDS[4]
     ],
     address: 'หมู่ 1 ตำบลศรีฐาน อำเภอภูกระดึง จังหวัดเลย 42180',
     phone: '042-871-333',
-    priceRange: 'ผู้ใหญ่ 40 บาท, เด็ก 20 บาท (ต่างชาติ 200/100 บาท)',
-    openingHours: 'เปิดฤดูกาลท่องเที่ยว 1 ต.ค. - 31 พ.ค. ของทุกปี (ขึ้นภู 06:00 - 13:00 น.)',
+    priceRange: '40 บาท/คน (เด็ก 20 บาท)',
+    openingHours: 'เปิดฤดูกาลท่องเที่ยว 1 ต.ค. - 31 พ.ค. (ขึ้นภู 06:00 - 13:00 น.)',
     googleMapsUrl: 'https://maps.google.com/?q=Pha+Lom+Sak+Phu+Kradueng',
     facebookUrl: 'https://facebook.com/PKDnationalpark',
     rating: 5.0,
@@ -237,11 +243,11 @@ export const INITIAL_PLACES: Place[] = [
       PHU_KRADUENG_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[4] // Thailand Tourism Standard
+      PRESET_STANDARDS[4]
     ],
     address: 'บ้านผาหวาย ตำบลปวนพุ อำเภอหนองหิน จังหวัดเลย 42190',
     phone: '089-952-2824',
-    priceRange: 'ค่าบริการรถอีแต๊กชุมชน 60 บาท/คน',
+    priceRange: 'ค่ารถอีแต๊ก 60 บาท/คน',
     openingHours: 'เปิดทุกวัน 05:00 - 18:00 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Phu+Pa+Po+Nong+Hin+Loei',
     facebookUrl: 'https://facebook.com/phupapo.fuji',
@@ -269,8 +275,8 @@ export const INITIAL_PLACES: Place[] = [
       PHU_PA_PO_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[0], // SHA Extra Plus
-      PRESET_STANDARDS[1]  // Green Hotel
+      PRESET_STANDARDS[0],
+      PRESET_STANDARDS[1]
     ],
     address: '166/1 หมู่ 2 ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '086-999-9218',
@@ -302,9 +308,9 @@ export const INITIAL_PLACES: Place[] = [
       CHIANG_KHAN_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[0], // SHA Extra Plus
-      PRESET_STANDARDS[1], // Green Hotel
-      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+      PRESET_STANDARDS[0],
+      PRESET_STANDARDS[1],
+      PRESET_STANDARDS[4]
     ],
     address: '252 หมู่ 1 ถนนเลย-ด่านซ้าย ตำบลโคกงาม อำเภอด่านซ้าย/ภูเรือ จังหวัดเลย 42160',
     phone: '042-810-589',
@@ -337,8 +343,8 @@ export const INITIAL_PLACES: Place[] = [
       PHU_PA_PO_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[0], // SHA Extra Plus
-      PRESET_STANDARDS[5]  // Specialty Coffee
+      PRESET_STANDARDS[0],
+      PRESET_STANDARDS[5]
     ],
     address: 'ถนนร่วมจิตต์ ตำบลกุดป่อง อำเภอเมืองเลย จังหวัดเลย 42000',
     phone: '087-865-9898',
@@ -371,8 +377,8 @@ export const INITIAL_PLACES: Place[] = [
       PHU_PA_PO_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[3], // Thai SELECT
-      PRESET_STANDARDS[0]  // SHA
+      PRESET_STANDARDS[3],
+      PRESET_STANDARDS[0]
     ],
     address: 'ซอย 14 ถนนศรีเชียงคาน ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '081-380-1412',
@@ -404,8 +410,8 @@ export const INITIAL_PLACES: Place[] = [
       PHU_PA_PO_IMAGE
     ],
     standards: [
-      PRESET_STANDARDS[2], // OTOP 5 ดาว
-      PRESET_STANDARDS[0]  // SHA Extra Plus
+      PRESET_STANDARDS[2],
+      PRESET_STANDARDS[0]
     ],
     address: 'ศูนย์รวมของฝากแก่งคุดคู้ ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
     phone: '042-821-254',
@@ -418,6 +424,168 @@ export const INITIAL_PLACES: Place[] = [
     viewsCount: 820,
     sharesCount: 190,
     tags: ['ของฝากเมืองเลย', 'มะพร้าวแก้ว', 'แก่งคุดคู้', 'OTOP 5 ดาว']
+  },
+
+  // --- ธุรกิจบริการน่าสนใจ (FEATURED SERVICES & LOCAL BUSINESSES) ---
+  {
+    id: 'mekong-river-boat-cruise-chiangkhan',
+    name: 'บริการเรือนำเที่ยวแม่น้ำโขง เชียงคาน',
+    nameEn: 'Chiang Khan Mekong River Cruise & Sunset Tour',
+    category: 'service',
+    district: 'อำเภอเชียงคาน',
+    shortDescription: 'ล่องเรือชมทัศนียภาพสองฝั่งโขงไทย-ลาว พระอาทิตย์ตกดิน และแก่งคุดคู้',
+    description: 'บริการเรือยนต์นำเที่ยวมาตรฐานความปลอดภัยสูง พาชื่นชมความงดงามของลำน้ำโขง ชมทิวทัศน์เทือกเขาฝั่ง สปป.ลาว และเกาะแก่งธรรมชาติ โดยเฉพาะช่วงเวลา 16:30 - 18:30 น. ที่พระอาทิตย์อัสดงลับทิวเขา แสงสีส้มทองสะท้อนผิวน้ำโขงอย่างงดงาม มีชูชีพสำหรับผู้โดยสารทุกคนและกัปตันเรือท้องถิ่นผู้ชำนาญร่องน้ำ',
+    imageUrl: CHIANG_KHAN_IMAGE,
+    gallery: [
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE,
+      CUISINE_CAFE_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+    ],
+    address: 'ท่าเรือวัดท่าคก ถนนชายโขง ตำบลเชียงคาน อำเภอเชียงคาน จังหวัดเลย 42110',
+    phone: '085-719-8822 (ชมรมเรือนำเที่ยวเชียงคาน)',
+    priceRange: 'เหมาลำ 600 - 1,200 บาท (นั่งได้ 8-10 ท่าน)',
+    openingHours: 'บริการทุกวัน 06:00 - 18:30 น. (ช่วงชมพระอาทิตย์ตก 16:30 - 18:00 น.)',
+    googleMapsUrl: 'https://maps.google.com/?q=Wat+Tha+Khok+Chiang+Khan',
+    facebookUrl: 'https://facebook.com/chiangkhanboatcruise',
+    lineUrl: 'https://line.me/R/ti/p/@mekongboat',
+    rating: 4.9,
+    isFeatured: true,
+    viewsCount: 780,
+    sharesCount: 230,
+    tags: ['ล่องเรือแม่น้ำโขง', 'พระอาทิตย์ตก', 'เรือนำเที่ยว', 'ชมวิวสองฝั่งโขง']
+  },
+  {
+    id: 'loei-traditional-cotton-weaving-center',
+    name: 'ศูนย์หัตถกรรมทอผ้าฝ้ายพื้นเมืองลายโบราณเมืองเลย',
+    nameEn: 'Loei Traditional Handwoven Cotton & Craft Center',
+    category: 'service',
+    district: 'อำเภอวังสะพุง',
+    shortDescription: 'ศูนย์เวิร์กช็อปทอผ้าฝ้ายย้อมสีธรรมชาติ สวมชุดไทเลย และถ่ายภาพที่ระลึก',
+    description: 'แหล่งเรียนรู้และบริการทางวัฒนธรรมครบวงจร เปิดโอกาสให้นักท่องเที่ยวได้สัมผัสเสน่ห์การทอผ้าฝ้ายโบราณ ทดลองย้อมสีธรรมชาติจากเปลือกไม้และพืชพรรณท้องถิ่น มีบริการเช่าชุดพื้นเมืองไทเลยสำหรับถ่ายภาพในบรรยากาศเรือนไทย และจำหน่ายผลิตภัณฑ์ผ้าทอมือเกรดส่งออก',
+    imageUrl: CUISINE_CAFE_IMAGE,
+    gallery: [
+      CUISINE_CAFE_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[2], // OTOP 5 ดาว
+      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+    ],
+    address: '145 หมู่ 4 ตำบลทรายขาว อำเภอวังสะพุง จังหวัดเลย 42130',
+    phone: '081-974-5511',
+    priceRange: 'เวิร์กช็อป 150 - 350 บาท/ท่าน, เช่าชุด 100 บาท',
+    openingHours: 'เปิดวันอังคาร - วันอาทิตย์ 08:30 - 17:00 น.',
+    googleMapsUrl: 'https://maps.google.com/?q=Wang+Saphung+Cotton+Center+Loei',
+    facebookUrl: 'https://facebook.com/loeicottoncraft',
+    lineUrl: 'https://line.me/R/ti/p/@loeicraft',
+    websiteUrl: 'https://loeicraft.com',
+    rating: 4.8,
+    isFeatured: true,
+    viewsCount: 650,
+    sharesCount: 175,
+    tags: ['เวิร์กช็อปทอผ้า', 'เช่าชุดพื้นเมือง', 'ย้อมสีธรรมชาติ', 'หัตถกรรม']
+  },
+  {
+    id: 'phu-ruea-green-van-car-rental',
+    name: 'ภูเรือกรีนคาร์ รถตู้ VIP และรถเช่าขับเที่ยวเมืองเลย',
+    nameEn: 'Phu Ruea Green Car & VIP Tour Van Rental Loei',
+    category: 'service',
+    district: 'อำเภอภูเรือ',
+    shortDescription: 'บริการรถตู้ VIP พร้อมคนขับชำนาญเส้นทางภูเขา และรถเก๋งเช่าขับเองรับ-ส่งสนามบินเลย',
+    description: 'บริการยานพาหนะเดินทางท่องเที่ยวระดับพรีเมียม รถตู้ VIP 9-10 ที่นั่ง เบาะนวดไฟฟ้า แอร์เย็นฉ่ำ พร้อมพนักงานขับรถท้องถิ่นที่ชำนาญเส้นทางขึ้นเขาสูงชันของภูกระดึง ภูเรือ ภูทอก และด่านซ้าย ให้บริการรับ-ส่งจากท่าอากาศยานเลย โรงแรม หรือจัดทริปพาเที่ยวแบบส่วนตัวตามแผนที่ต้องการ',
+    imageUrl: HERO_IMAGE,
+    gallery: [
+      HERO_IMAGE,
+      PHU_KRADUENG_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[4]  // Thailand Tourism Standard
+    ],
+    address: '88 หมู่ 2 ตำบลหนองบัว อำเภอภูเรือ จังหวัดเลย 42160 (บริการรับส่งสนามบินเลย)',
+    phone: '089-882-9900',
+    priceRange: 'รถเช่าขับเอง 800 - 1,400 บาท/วัน, รถตู้ VIP พร้อมคนขับ 1,800 - 2,500 บาท/วัน',
+    openingHours: 'บริการทุกวัน 24 ชั่วโมง (ศูนย์ประสานงาน 06:00 - 21:00 น.)',
+    googleMapsUrl: 'https://maps.google.com/?q=Loei+Airport',
+    facebookUrl: 'https://facebook.com/phurueagreencar',
+    lineUrl: 'https://line.me/R/ti/p/@phurueacar',
+    rating: 4.9,
+    isFeatured: true,
+    viewsCount: 890,
+    sharesCount: 280,
+    tags: ['รถเช่าสนามบินเลย', 'รถตู้VIP', 'คนขับชำนาญทาง', 'พาเที่ยวขุนเขา']
+  },
+  {
+    id: 'loei-wellness-herbal-spa',
+    name: 'เลยสปา & นวดแผนไทยเพื่อสุขภาพ สมุนไพรลุ่มน้ำโขง',
+    nameEn: 'Loei Riverside Wellness Spa & Herbal Traditional Massage',
+    category: 'service',
+    district: 'อำเภอเมืองเลย',
+    shortDescription: 'สปาผ่อนคลายและนวดแผนไทยสมุนไพรพื้นบ้าน ฟื้นฟูกล้ามเนื้อหลังพิชิตยอดภู',
+    description: 'ศูนย์ส่งเสริมสุขภาพและสปาที่ได้รับการรับรองมาตรฐานสากล บริการนวดแผนไทยโบราณ นวดฝ่าเท้า นวดอโรมาเธอราปีผ่อนคลายกล้ามเนื้อหลังจากเดินป่าภูกระดึงหรือเที่ยวชมเมืองเลย พร้อมการประคบด้วยลูกประคบสมุนไพรสดสูตรพื้นถิ่นไทเลย บรรยากาศเงียบสงบ กลิ่นหอมอโรมาผ่อนคลาย',
+    imageUrl: CUISINE_CAFE_IMAGE,
+    gallery: [
+      CUISINE_CAFE_IMAGE,
+      HERO_IMAGE,
+      CHIANG_KHAN_IMAGE,
+      PHU_PA_PO_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[0], // SHA Extra Plus
+      PRESET_STANDARDS[4]  // TTS
+    ],
+    address: '24/5 ถนนพิพัฒน์มงคล ตำบลกุดป่อง อำเภอเมืองเลย จังหวัดเลย 42000',
+    phone: '042-833-415',
+    priceRange: 'นวดไทย 250 - 350 บาท/ชม., อโรมาสปา 650 - 1,200 บาท',
+    openingHours: 'เปิดทุกวัน 10:00 - 21:30 น.',
+    googleMapsUrl: 'https://maps.google.com/?q=Loei+Wellness+Spa',
+    facebookUrl: 'https://facebook.com/loeiwellnessspa',
+    lineUrl: 'https://line.me/R/ti/p/@loeispa',
+    rating: 4.8,
+    isFeatured: false,
+    viewsCount: 520,
+    sharesCount: 135,
+    tags: ['นวดแผนไทย', 'สปาสมุนไพร', 'คลายเมื่อยหลังเดินภู', 'สุขภาพ']
+  },
+  {
+    id: 'phukradueng-camping-gear-adventure',
+    name: 'แคมป์ปิ้ง & อุปกรณ์เดินป่า ภูกระดึง แอดเวนเจอร์',
+    nameEn: 'Phu Kradueng Trekking Gear & Camping Rental Service',
+    category: 'service',
+    district: 'อำเภอภูกระดึง',
+    shortDescription: 'บริการเช่าเต็นท์ ถุงนอน ไม้เท้าเดินป่า เตาแก๊สพกพา และสัมภาระแคมป์ปิ้ง',
+    description: 'บริการให้เช่าอุปกรณ์เดินป่าและตั้งแคมป์คุณภาพสูงบริเวณเชิงภูกระดึง มีเต็นท์กันน้ำกันลม ถุงนอนหนาสำหรับอุณหภูมิเลขตัวเดียว แผ่นรองนอน ไม้เท้าค้ำยันช่วยเดินขึ้นเขา เตาแก๊สสนาม เสื้อกันฝน และไฟฉายคาดหัว คัดสรรอุปกรณ์น้ำหนักเบาและสะอาดฆ่าเชื้อทุกครั้ง พร้อมคำแนะนำเส้นทางเดินป่าอย่างละเอียด',
+    imageUrl: PHU_KRADUENG_IMAGE,
+    gallery: [
+      PHU_KRADUENG_IMAGE,
+      HERO_IMAGE,
+      PHU_PA_PO_IMAGE,
+      CHIANG_KHAN_IMAGE
+    ],
+    standards: [
+      PRESET_STANDARDS[4] // TTS
+    ],
+    address: 'หมู่ 1 บ้านศรีฐาน (ทางขึ้นอุทยานแห่งชาติภูกระดึง) อำเภอภูกระดึง จังหวัดเลย 42180',
+    phone: '087-992-1133',
+    priceRange: 'เช่าเต็นท์ 200 - 450 บาท, ถุงนอน 50 บาท, ไม้เท้า 30 บาท',
+    openingHours: 'เปิดบริการทุกวัน 05:30 - 18:00 น. (ช่วงฤดูกาลเปิดภู)',
+    googleMapsUrl: 'https://maps.google.com/?q=Phu+Kradueng+National+Park',
+    facebookUrl: 'https://facebook.com/pkdadventuregear',
+    lineUrl: 'https://line.me/R/ti/p/@pkdgear',
+    rating: 4.9,
+    isFeatured: true,
+    viewsCount: 710,
+    sharesCount: 205,
+    tags: ['เช่าเต็นท์ภูกระดึง', 'อุปกรณ์เดินป่า', 'ถุงนอน', 'แคมป์ปิ้ง']
   }
 ];
 

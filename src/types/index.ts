@@ -1,4 +1,4 @@
-export type PlaceCategory = 'stay' | 'restaurant' | 'cafe' | 'attraction' | 'souvenir';
+export type PlaceCategory = 'stay' | 'restaurant' | 'cafe' | 'attraction' | 'souvenir' | 'service';
 
 export interface StandardBadge {
   id: string;
@@ -60,10 +60,14 @@ export interface DistrictInfo {
   imageUrl: string;
 }
 
+export type PriceFilter = 'all' | 'budget' | 'moderate' | 'luxury';
+
 export interface FilterState {
   searchQuery: string;
   category: PlaceCategory | 'all';
   district: string;
+  priceFilter: PriceFilter;
+  hasStandardsOnly: boolean;
 }
 
 export interface AnalyticsEvent {

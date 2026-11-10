@@ -22,7 +22,7 @@
         "category": {
           "type": "string",
           "description": "Category of place",
-          "enum": ["stay", "restaurant", "cafe", "attraction", "souvenir"]
+          "enum": ["stay", "restaurant", "cafe", "attraction", "souvenir", "service"]
         },
         "district": {
           "type": "string",
