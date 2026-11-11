@@ -224,9 +224,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   // Helper function to compress images on client using HTML5 Canvas to save storage & bandwidth
   const compressImage = async (
     file: File,
-    maxWidth = 1280,
-    maxHeight = 1280,
-    quality = 0.78
+    maxWidth = 960,
+    maxHeight = 720,
+    quality = 0.70
   ): Promise<{ dataUrl: string; originalSize: number; compressedSize: number }> => {
     return new Promise((resolve) => {
       // SVGs don't need raster compression
@@ -298,9 +298,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     
     try {
       const isLogo = target === 'standardLogo';
-      const maxWidth = isLogo ? 400 : 1280;
-      const maxHeight = isLogo ? 400 : 1280;
-      const quality = isLogo ? 0.85 : 0.78;
+      const maxWidth = isLogo ? 300 : 960;
+      const maxHeight = isLogo ? 300 : 720;
+      const quality = isLogo ? 0.85 : 0.70;
 
       let totalOrig = 0;
       let totalComp = 0;
@@ -921,7 +921,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </button>
                   </div>
 
-                  <form onSubmit={(e) => { e.preventDefault(); handleSavePlace('published'); }} className="space-y-6 text-xs sm:text-sm">
+                  <form onSubmit={(e) => { e.preventDefault(); handleSavePlace(editingPlace.status === 'draft' ? 'draft' : 'published'); }} className="space-y-6 text-xs sm:text-sm">
                     
                     {/* 1. Basic Info */}
                     <div className="space-y-4">
@@ -1369,11 +1369,63 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           ไฮไลท์สถานที่แนะนำประจำสัปดาห์ (Featured on Home Cover)
                         </label>
                       </div>
+
+                      {/* Explicit Publication Status Selector */}
+                      <div className="pt-3 border-t border-stone-200">
+                        <label className="block font-medium text-stone-700 mb-2">
+                          เลือกสถานะการเผยแพร่ข้อมูลสถานที่
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setEditingPlace({ ...editingPlace, status: 'draft' })}
+                            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                              (editingPlace.status || 'published') === 'draft'
+                                ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300'
+                                : 'bg-stone-50 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            <FileText className={`w-5 h-5 shrink-0 mt-0.5 ${
+                              (editingPlace.status || 'published') === 'draft' ? 'text-amber-700' : 'text-stone-400'
+                            }`} />
+                            <div>
+                              <span className="font-bold text-xs text-stone-900 block">
+                                📝 บันทึกแบบร่าง (Draft)
+                              </span>
+                              <span className="text-[11px] text-stone-500 leading-tight block mt-0.5">
+                                ซ่อนจากหน้าเว็บจริง บันทึกเก็บไว้ให้ทีมงานตรวจทานในระบบหลังบ้านเท่านั้น
+                              </span>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingPlace({ ...editingPlace, status: 'published' })}
+                            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                              (editingPlace.status || 'published') === 'published'
+                                ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-300'
+                                : 'bg-stone-50 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            <Sparkles className={`w-5 h-5 shrink-0 mt-0.5 ${
+                              (editingPlace.status || 'published') === 'published' ? 'text-emerald-700' : 'text-stone-400'
+                            }`} />
+                            <div>
+                              <span className="font-bold text-xs text-stone-900 block">
+                                🌐 เผยแพร่ทันที (Published)
+                              </span>
+                              <span className="text-[11px] text-stone-500 leading-tight block mt-0.5">
+                                แสดงบนหน้าเว็บไซต์ LOEI JOURNEY ให้ผู้เข้าชมทั่วไปค้นหาและเปิดดูได้ทันที
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-stone-200">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-500">สถานะสถานที่:</span>
+                        <span className="text-xs text-stone-500">สถานะที่เลือก:</span>
                         <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
                           (editingPlace.status || 'published') === 'draft'
                             ? 'bg-amber-100 text-amber-900 border border-amber-300'

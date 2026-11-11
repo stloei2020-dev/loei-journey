@@ -32,7 +32,7 @@
         "description": {
           "type": "string",
           "description": "Detailed description of the destination",
-          "maxLength": 3000
+          "maxLength": 10000
         },
         "shortDescription": {
           "type": "string",
@@ -42,7 +42,7 @@
         "imageUrl": {
           "type": "string",
           "description": "Main cover image URL, local asset path, or compressed data URL",
-          "maxLength": 500000
+          "maxLength": 1000000
         },
         "gallery": {
           "type": "array",

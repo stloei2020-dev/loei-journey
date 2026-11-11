@@ -70,9 +70,10 @@ export default function App() {
   const [priceFilter, setPriceFilter] = useState<PriceFilter>('all');
   const [hasStandardsOnly, setHasStandardsOnly] = useState<boolean>(false);
 
-  // Modals
+  // Modals & Preview States
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(false);
 
   // Initialize and load data
   const loadData = async () => {
@@ -176,11 +177,14 @@ export default function App() {
     return true;
   };
 
-  // Viewable places: Admins can see all (including drafts), public visitors only see published places
+  // Viewable places: Public visitors ALWAYS see only published places (100% hidden drafts).
+  // Admins only see drafts if they explicitly enable the preview toggle.
   const viewablePlaces = useMemo(() => {
-    if (isCurrentlyAdmin) return places;
+    if (isCurrentlyAdmin && showDraftsInLiveSite) {
+      return places;
+    }
     return places.filter((p) => (p.status || 'published') === 'published');
-  }, [places, isCurrentlyAdmin]);
+  }, [places, isCurrentlyAdmin, showDraftsInLiveSite]);
 
   // Filtered places calculation
   const filteredPlaces = useMemo(() => {
@@ -243,6 +247,8 @@ export default function App() {
 
   const isFiltered = selectedCategory !== 'all' || selectedDistrict !== 'all' || searchQuery.trim().length > 0 || priceFilter !== 'all' || hasStandardsOnly;
 
+  const draftCount = places.filter(p => p.status === 'draft').length;
+
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-900 selection:bg-[#153326] selection:text-white">
       {/* Top Header */}
@@ -258,16 +264,38 @@ export default function App() {
       {/* Admin Mode Bar if logged in */}
       {isCurrentlyAdmin && (
         <div className="bg-[#153326] text-white px-4 py-2 text-xs border-b border-emerald-900/60 shadow-2xs">
-          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between flex-wrap">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 max-w-7xl mx-auto w-full justify-between flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>โหมดแอดมิน: <strong className="text-amber-300">{adminProfile?.name || adminUser?.displayName || adminUser?.email || 'ผู้ดูแล'}</strong> ({adminProfile?.role || 'admin'})</span>
-              {places.some(p => p.status === 'draft') && (
-                <span className="bg-amber-400 text-stone-950 font-bold px-2 py-0.5 rounded text-[11px] ml-2">
-                  มีแบบร่าง {places.filter(p => p.status === 'draft').length} รายการ (ผู้เยี่ยมชมจะไม่เห็น)
+              <span>
+                โหมดแอดมิน: <strong className="text-amber-300">{adminProfile?.name || adminUser?.displayName || adminUser?.email || 'ผู้ดูแล'}</strong>
+              </span>
+
+              {/* Status Indicator & Preview Switch */}
+              {draftCount > 0 ? (
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-400 text-stone-950 font-bold px-2 py-0.5 rounded text-[11px]">
+                    แบบร่าง {draftCount} แห่ง (ซ่อนจากหน้าเว็บจริง)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDraftsInLiveSite(!showDraftsInLiveSite)}
+                    className={`px-2.5 py-0.5 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
+                      showDraftsInLiveSite
+                        ? 'bg-amber-500 text-stone-950 border-amber-300 font-bold'
+                        : 'bg-white/10 hover:bg-white/20 text-stone-200 border-white/20'
+                    }`}
+                  >
+                    {showDraftsInLiveSite ? '✓ กำลังพรีวิวรวมแบบร่าง' : '👁️ พรีวิวแบบร่างบนหน้าเว็บ'}
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[11px] text-emerald-300/80">
+                  (หน้าเว็บแสดงเฉพาะข้อมูลที่เผยแพร่แล้ว)
                 </span>
               )}
             </div>
+
             <button
               onClick={() => setIsAdminOpen(true)}
               className="text-amber-300 hover:text-white underline text-xs font-medium cursor-pointer"

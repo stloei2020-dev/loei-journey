@@ -298,7 +298,23 @@ export async function savePlace(place: Place): Promise<Place> {
 
   removeDeletedPlaceId(sanitizedId);
 
-  // Update local cache immediately
+  // 1. Persist to Firestore directly
+  const { id, ...data } = cleanPlace;
+  try {
+    await setDoc(doc(db, 'places', sanitizedId), {
+      ...data,
+      status: cleanPlace.status
+    });
+  } catch (firestoreError: any) {
+    console.error('Firestore write error:', firestoreError);
+    const msg = firestoreError?.message || String(firestoreError);
+    if (msg.includes('exceeds maximum allowed size') || msg.includes('larger than 1048576')) {
+      throw new Error('ขนาดรูปภาพรวมเกินขีดจำกัดของระบบคลาวด์ (1MB) กรุณาลองอัปโหลดใหม่อีกครั้ง');
+    }
+    throw new Error('บันทึกลงระบบคลาวด์ Firestore ล้มเหลว: ' + msg);
+  }
+
+  // 2. Update local cache for instant response
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLACES);
     let list: Place[] = raw ? JSON.parse(raw) : [];
@@ -311,17 +327,6 @@ export async function savePlace(place: Place): Promise<Place> {
     localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
   } catch (e) {
     console.error(e);
-  }
-
-  // Persist to Firestore
-  try {
-    const { id, ...data } = cleanPlace;
-    await setDoc(doc(db, 'places', sanitizedId), {
-      ...data,
-      status: cleanPlace.status
-    });
-  } catch (error) {
-    console.warn('Firestore write warning:', error);
   }
 
   return cleanPlace;
