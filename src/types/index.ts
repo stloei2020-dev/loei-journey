@@ -8,6 +8,8 @@ export interface StandardBadge {
   description?: string;
 }
 
+export type PlaceStatus = 'draft' | 'published';
+
 export interface Place {
   id: string;
   name: string;
@@ -29,11 +31,21 @@ export interface Place {
   websiteUrl?: string;
   rating?: number;
   isFeatured?: boolean;
+  status?: PlaceStatus;
   tags?: string[];
   viewsCount?: number;
   sharesCount?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface AdminProfile {
+  id: string;
+  name: string;
+  email?: string;
+  role: 'superadmin' | 'editor';
+  authMethod: 'google' | 'passkey';
+  avatar?: string;
 }
 
 export interface Article {

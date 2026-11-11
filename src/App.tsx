@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Place, Article, PlaceCategory, PriceFilter } from './types';
+import { Place, Article, PlaceCategory, PriceFilter, AdminProfile } from './types';
 import {
   getPlaces,
   subscribePlaces,
@@ -15,7 +15,9 @@ import {
   auth,
   onAuthStateChanged,
   signOut,
-  User
+  User,
+  getActiveAdminSession,
+  clearAdminSession
 } from './lib/firebase';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -45,6 +47,20 @@ export default function App() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(getActiveAdminSession());
+
+  const isCurrentlyAdmin = Boolean(adminProfile || adminUser);
+
+  // Logout handler clearing both Firebase auth and team passkey session
+  const handleLogoutAdmin = async () => {
+    clearAdminSession();
+    setAdminProfile(null);
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Navigation & Filtering State
   const [currentTab, setCurrentTab] = useState<string>('home');
@@ -160,9 +176,15 @@ export default function App() {
     return true;
   };
 
+  // Viewable places: Admins can see all (including drafts), public visitors only see published places
+  const viewablePlaces = useMemo(() => {
+    if (isCurrentlyAdmin) return places;
+    return places.filter((p) => (p.status || 'published') === 'published');
+  }, [places, isCurrentlyAdmin]);
+
   // Filtered places calculation
   const filteredPlaces = useMemo(() => {
-    return places.filter((p) => {
+    return viewablePlaces.filter((p) => {
       // Category filter
       if (selectedCategory !== 'all') {
         if (selectedCategory === 'restaurant') {
@@ -206,18 +228,18 @@ export default function App() {
 
       return true;
     });
-  }, [places, selectedCategory, selectedDistrict, priceFilter, hasStandardsOnly, searchQuery, currentTab]);
+  }, [viewablePlaces, selectedCategory, selectedDistrict, priceFilter, hasStandardsOnly, searchQuery, currentTab]);
 
   // Featured place of the week
   const featuredPlace = useMemo(() => {
-    return places.find((p) => p.isFeatured && p.id === 'phu-tok-chiang-khan') || places[0];
-  }, [places]);
+    return viewablePlaces.find((p) => p.isFeatured && p.id === 'phu-tok-chiang-khan') || viewablePlaces[0];
+  }, [viewablePlaces]);
 
   // Curated lists for home tab
-  const stays = useMemo(() => places.filter((p) => p.category === 'stay'), [places]);
-  const diningAndCafes = useMemo(() => places.filter((p) => p.category === 'restaurant' || p.category === 'cafe'), [places]);
-  const attractions = useMemo(() => places.filter((p) => p.category === 'attraction'), [places]);
-  const services = useMemo(() => places.filter((p) => p.category === 'service'), [places]);
+  const stays = useMemo(() => viewablePlaces.filter((p) => p.category === 'stay'), [viewablePlaces]);
+  const diningAndCafes = useMemo(() => viewablePlaces.filter((p) => p.category === 'restaurant' || p.category === 'cafe'), [viewablePlaces]);
+  const attractions = useMemo(() => viewablePlaces.filter((p) => p.category === 'attraction'), [viewablePlaces]);
+  const services = useMemo(() => viewablePlaces.filter((p) => p.category === 'service'), [viewablePlaces]);
 
   const isFiltered = selectedCategory !== 'all' || selectedDistrict !== 'all' || searchQuery.trim().length > 0 || priceFilter !== 'all' || hasStandardsOnly;
 
@@ -228,9 +250,33 @@ export default function App() {
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         adminUser={adminUser}
+        adminProfile={adminProfile}
         onOpenAdmin={() => setIsAdminOpen(true)}
-        onLogoutAdmin={() => signOut(auth)}
+        onLogoutAdmin={handleLogoutAdmin}
       />
+
+      {/* Admin Mode Bar if logged in */}
+      {isCurrentlyAdmin && (
+        <div className="bg-[#153326] text-white px-4 py-2 text-xs border-b border-emerald-900/60 shadow-2xs">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>โหมดแอดมิน: <strong className="text-amber-300">{adminProfile?.name || adminUser?.displayName || adminUser?.email || 'ผู้ดูแล'}</strong> ({adminProfile?.role || 'admin'})</span>
+              {places.some(p => p.status === 'draft') && (
+                <span className="bg-amber-400 text-stone-950 font-bold px-2 py-0.5 rounded text-[11px] ml-2">
+                  มีแบบร่าง {places.filter(p => p.status === 'draft').length} รายการ (ผู้เยี่ยมชมจะไม่เห็น)
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setIsAdminOpen(true)}
+              className="text-amber-300 hover:text-white underline text-xs font-medium cursor-pointer"
+            >
+              เปิดแดชบอร์ดจัดการข้อมูล &rarr;
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">
         {/* Hero Section */}
@@ -562,6 +608,8 @@ export default function App() {
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         adminUser={adminUser}
+        adminProfile={adminProfile}
+        onUpdateAdminProfile={setAdminProfile}
         places={places}
         articles={articles}
         onRefreshData={loadData}

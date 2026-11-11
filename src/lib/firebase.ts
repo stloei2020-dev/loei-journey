@@ -20,7 +20,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Place, Article, AnalyticsEvent, AnalyticsSummary } from '../types';
+import { Place, Article, AnalyticsEvent, AnalyticsSummary, AdminProfile, PlaceStatus } from '../types';
 import { SAMPLE_PLACES, INITIAL_PLACES, INITIAL_ARTICLES } from '../data/seedData';
 
 // Initialize Firebase
@@ -30,10 +30,62 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'st.loei2020@gmail.com';
+export const DEFAULT_ADMIN_PASSKEY = 'loei2026';
 
 const STORAGE_KEY_PLACES = 'loei_journey_places_v4';
 const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v4';
 const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v4';
+const STORAGE_KEY_ADMIN_SESSION = 'loei_journey_admin_session_v4';
+
+// Predefined multi-user admin team
+export const INITIAL_ADMIN_TEAM: AdminProfile[] = [
+  {
+    id: 'admin-master',
+    name: 'ผู้ดูแลระบบหลัก (st.loei2020)',
+    email: 'st.loei2020@gmail.com',
+    role: 'superadmin',
+    authMethod: 'passkey'
+  },
+  {
+    id: 'admin-editorial',
+    name: 'กองบรรณาธิการนิตยสาร (Editorial Team)',
+    email: 'editorial@loeijourney.com',
+    role: 'editor',
+    authMethod: 'passkey'
+  },
+  {
+    id: 'admin-tourism',
+    name: 'แอดมินฝ่ายสถานที่และที่พัก (Tourism Team)',
+    email: 'tourism@loeijourney.com',
+    role: 'editor',
+    authMethod: 'passkey'
+  }
+];
+
+export function getActiveAdminSession(): AdminProfile | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ADMIN_SESSION);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveAdminSession(admin: AdminProfile): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ADMIN_SESSION, JSON.stringify(admin));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function clearAdminSession(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_ADMIN_SESSION);
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -227,19 +279,34 @@ export async function getPlaces(): Promise<Place[]> {
   return result;
 }
 
-export async function savePlace(place: Place): Promise<void> {
-  const path = `places/${place.id}`;
-  removeDeletedPlaceId(place.id);
+export async function savePlace(place: Place): Promise<Place> {
+  const sanitizedId = (place.id || `place-${Date.now()}`)
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 100) || `place-${Date.now()}`;
+
+  const cleanPlace: Place = {
+    ...place,
+    id: sanitizedId,
+    status: place.status || 'published',
+    updatedAt: new Date().toISOString(),
+    createdAt: place.createdAt || new Date().toISOString(),
+    viewsCount: place.viewsCount || 0,
+    sharesCount: place.sharesCount || 0
+  };
+
+  removeDeletedPlaceId(sanitizedId);
 
   // Update local cache immediately
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLACES);
     let list: Place[] = raw ? JSON.parse(raw) : [];
-    const idx = list.findIndex(p => p.id === place.id);
+    const idx = list.findIndex(p => p.id === sanitizedId);
     if (idx >= 0) {
-      list[idx] = place;
+      list[idx] = cleanPlace;
     } else {
-      list.unshift(place);
+      list.unshift(cleanPlace);
     }
     localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
   } catch (e) {
@@ -248,17 +315,16 @@ export async function savePlace(place: Place): Promise<void> {
 
   // Persist to Firestore
   try {
-    const { id, ...data } = place;
-    await setDoc(doc(db, 'places', id), {
+    const { id, ...data } = cleanPlace;
+    await setDoc(doc(db, 'places', sanitizedId), {
       ...data,
-      updatedAt: new Date().toISOString(),
-      createdAt: place.createdAt || new Date().toISOString(),
-      viewsCount: place.viewsCount || 0,
-      sharesCount: place.sharesCount || 0
+      status: cleanPlace.status
     });
   } catch (error) {
     console.warn('Firestore write warning:', error);
   }
+
+  return cleanPlace;
 }
 
 export async function deletePlace(id: string): Promise<void> {

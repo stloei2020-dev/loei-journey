@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Menu, X, Shield, LogOut, Compass, Sparkles } from 'lucide-react';
 import { User } from '../lib/firebase';
+import { AdminProfile } from '../types';
 
 interface HeaderProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
   adminUser: User | null;
+  adminProfile?: AdminProfile | null;
   onOpenAdmin: () => void;
   onLogoutAdmin: () => void;
 }
@@ -14,9 +16,12 @@ export const Header: React.FC<HeaderProps> = ({
   currentTab,
   onSelectTab,
   adminUser,
+  adminProfile,
   onOpenAdmin,
   onLogoutAdmin
 }) => {
+  const isLoggedIn = Boolean(adminUser || adminProfile);
+  const adminDisplayName = adminProfile?.name || adminUser?.displayName || adminUser?.email || 'แอดมิน';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
@@ -82,7 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: 1 Primary Action (Admin Access / System Status) */}
           <div className="flex items-center gap-3 shrink-0">
-            {adminUser ? (
+            {isLoggedIn ? (
               <div className="flex items-center gap-2">
                 <button
                   onClick={onOpenAdmin}
@@ -90,7 +95,7 @@ export const Header: React.FC<HeaderProps> = ({
                   title="จัดการหลังบ้าน"
                 >
                   <Shield className="w-3.5 h-3.5 text-amber-300" />
-                  <span>ระบบหลังบ้าน</span>
+                  <span className="max-w-[120px] truncate">{adminDisplayName}</span>
                 </button>
                 <button
                   onClick={onLogoutAdmin}
@@ -147,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-[#153326] rounded-md hover:bg-emerald-900 transition-colors"
             >
               <Shield className="w-4 h-4 text-amber-300" />
-              <span>{adminUser ? 'เข้าสู่ระบบหลังบ้าน (Admin)' : 'เข้าสู่ระบบผู้ดูแล'}</span>
+              <span>{isLoggedIn ? `ระบบหลังบ้าน (${adminDisplayName})` : 'เข้าสู่ระบบผู้ดูแล (Admin)'}</span>
             </button>
           </div>
         </div>

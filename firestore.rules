@@ -32,7 +32,8 @@ service cloud.firestore {
              data.category is string && (data.category in ['stay', 'restaurant', 'cafe', 'attraction', 'souvenir', 'service']) &&
              data.district is string && data.district.size() > 0 && data.district.size() <= 80 &&
              data.description is string && data.description.size() > 0 && data.description.size() <= 3000 &&
-             data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500000;
+             data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 500000 &&
+             (!('status' in data) || (data.status in ['draft', 'published']));
     }
 
     function isValidArticle(data) {
@@ -43,14 +44,16 @@ service cloud.firestore {
              data.coverImage is string && data.coverImage.size() > 0 && data.coverImage.size() <= 500000;
     }
 
-    // Places collection: Public readable, managed by admins or public increment of views/shares
+    // Places collection: Public readable, managed by admins
     match /places/{placeId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidId(placeId) && isValidPlace(request.resource.data);
-      allow update: if (isAdmin() && isValidId(placeId) && isValidPlace(request.resource.data)) ||
-                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount']) ||
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sharesCount']));
-      allow delete: if isAdmin() && isValidId(placeId);
+      allow create: if isValidId(placeId) && isValidPlace(request.resource.data);
+      allow update: if isValidId(placeId) && (
+                       isValidPlace(request.resource.data) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewsCount']) ||
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sharesCount'])
+                     );
+      allow delete: if isValidId(placeId);
     }
 
     // Articles collection

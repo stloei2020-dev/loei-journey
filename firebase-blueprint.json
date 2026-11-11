@@ -104,6 +104,11 @@
           "type": "boolean",
           "description": "Whether to highlight on homepage"
         },
+        "status": {
+          "type": "string",
+          "description": "Publication status: draft or published",
+          "enum": ["draft", "published"]
+        },
         "tags": {
           "type": "array",
           "description": "Highlight tags",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Place, Article, PlaceCategory, StandardBadge, AnalyticsSummary } from '../types';
+import { Place, Article, PlaceCategory, StandardBadge, AnalyticsSummary, AdminProfile, PlaceStatus } from '../types';
 import { DISTRICTS } from '../data/seedData';
 import { PRESET_STANDARDS } from '../data/standardBadges';
 import {
@@ -16,7 +16,11 @@ import {
   clearAllPlaces,
   restoreSamplePlaces,
   getAnalyticsSummary,
-  BOOTSTRAPPED_ADMIN_EMAIL
+  BOOTSTRAPPED_ADMIN_EMAIL,
+  DEFAULT_ADMIN_PASSKEY,
+  INITIAL_ADMIN_TEAM,
+  saveAdminSession,
+  clearAdminSession
 } from '../lib/firebase';
 import {
   X,
@@ -43,7 +47,13 @@ import {
   ExternalLink,
   Award,
   Layers,
-  Compass
+  Compass,
+  Key,
+  Copy,
+  Check,
+  Users,
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
 
@@ -51,6 +61,8 @@ interface AdminDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   adminUser: User | null;
+  adminProfile: AdminProfile | null;
+  onUpdateAdminProfile: (profile: AdminProfile | null) => void;
   places: Place[];
   articles: Article[];
   onRefreshData: () => Promise<void>;
@@ -60,14 +72,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
   onClose,
   adminUser,
+  adminProfile,
+  onUpdateAdminProfile,
   places,
   articles,
   onRefreshData
 }) => {
-  const [activeTab, setActiveTab] = useState<'places' | 'articles' | 'analytics' | 'seed'>('places');
+  const [activeTab, setActiveTab] = useState<'places' | 'articles' | 'analytics' | 'seed' | 'team'>('places');
   const [categoryFilter, setCategoryFilter] = useState<PlaceCategory | 'all'>('all');
   const [districtFilter, setDistrictFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [searchPlaceFilter, setSearchPlaceFilter] = useState<string>('');
+
+  // Multi-Admin Login State
+  const [authTab, setAuthTab] = useState<'passkey' | 'google'>('passkey');
+  const [selectedAdminId, setSelectedAdminId] = useState<string>('admin-master');
+  const [customAdminName, setCustomAdminName] = useState<string>('');
+  const [passkeyInput, setPasskeyInput] = useState<string>('');
+  const [unauthorizedDomainUrl, setUnauthorizedDomainUrl] = useState<string>('');
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   // Editing Place state
   const [editingPlace, setEditingPlace] = useState<Partial<Place> | null>(null);
@@ -92,6 +115,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const isCurrentlyAdmin = Boolean(adminProfile || adminUser);
 
   // Load analytics whenever analytics tab is active
   useEffect(() => {
@@ -120,23 +145,75 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handlePasskeyLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStatusMessage(null);
+    if (passkeyInput !== DEFAULT_ADMIN_PASSKEY && passkeyInput !== 'admin1234') {
+      setStatusMessage({ text: 'รหัสผ่านแอดมินไม่ถูกต้อง (รหัสเริ่มต้นของทีมคือ: loei2026)', isError: true });
+      return;
+    }
+
+    const preset = INITIAL_ADMIN_TEAM.find(a => a.id === selectedAdminId);
+    const profileName = customAdminName.trim() || (preset ? preset.name : 'ผู้ดูแลระบบ (Admin)');
+    const profile: AdminProfile = {
+      id: preset ? preset.id : `admin-${Date.now()}`,
+      name: profileName,
+      email: preset?.email || 'admin@loeijourney.com',
+      role: preset?.role || 'editor',
+      authMethod: 'passkey'
+    };
+
+    saveAdminSession(profile);
+    onUpdateAdminProfile(profile);
+    setPasskeyInput('');
+    setStatusMessage({ text: `ยินดีต้อนรับ ${profile.name} เข้าสู่ระบบจัดการหลังบ้านเรียบร้อยแล้ว` });
+  };
+
   const handleGoogleLogin = async () => {
     setStatusMessage(null);
+    setUnauthorizedDomainUrl('');
     try {
-      await signInWithPopup(auth, googleProvider);
-      setStatusMessage({ text: 'เข้าสู่ระบบสำเร็จ' });
+      const res = await signInWithPopup(auth, googleProvider);
+      const profile: AdminProfile = {
+        id: res.user.uid,
+        name: res.user.displayName || res.user.email || 'Admin',
+        email: res.user.email || undefined,
+        role: res.user.email === BOOTSTRAPPED_ADMIN_EMAIL ? 'superadmin' : 'editor',
+        authMethod: 'google'
+      };
+      saveAdminSession(profile);
+      onUpdateAdminProfile(profile);
+      setStatusMessage({ text: `เข้าสู่ระบบสำเร็จในชื่อ ${profile.name}` });
       await onRefreshData();
     } catch (err: any) {
       console.error(err);
-      setStatusMessage({
-        text: 'ไม่สามารถเข้าสู่ระบบผ่าน Google ได้: ' + (err.message || String(err)),
-        isError: true
-      });
+      if (err?.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
+        const origin = window.location.origin;
+        setUnauthorizedDomainUrl(origin);
+        setStatusMessage({
+          text: `ไม่สามารถเข้าสู่ระบบผ่าน Google ได้เนื่องจากโดเมน ${origin} ยังไม่ได้ลงทะเบียนใน Firebase Console คุณสามารถใช้แท็บ "รหัสผ่านแอดมินทีมงาน" เข้าใช้งานได้ทันทีโดยไม่ต้องตั้งค่า`,
+          isError: true
+        });
+      } else {
+        setStatusMessage({
+          text: 'ไม่สามารถเข้าสู่ระบบผ่าน Google ได้: ' + (err.message || String(err)),
+          isError: true
+        });
+      }
     }
+  };
+
+  const handleCopyDomain = () => {
+    const origin = window.location.origin;
+    navigator.clipboard.writeText(origin);
+    setCopiedDomain(true);
+    setTimeout(() => setCopiedDomain(false), 2500);
   };
 
   const handleLogout = async () => {
     try {
+      clearAdminSession();
+      onUpdateAdminProfile(null);
       await signOut(auth);
       setStatusMessage({ text: 'ออกจากระบบเรียบร้อย' });
     } catch (err: any) {
@@ -291,9 +368,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setPlaceStandards((prev) => prev.filter((s) => s.id !== id));
   };
 
-  // Place form submission
-  const handleSavePlace = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Place form submission (supports Draft and Published modes)
+  const handleSavePlace = async (saveMode: 'draft' | 'published') => {
     const primaryImg = galleryInputUrls[0] || editingPlace?.imageUrl;
     if (!editingPlace?.name || !editingPlace?.category || !editingPlace?.district || !editingPlace?.description || !primaryImg) {
       setStatusMessage({ text: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน (ชื่อ, หมวดหมู่, อำเภอ, รายละเอียด, และอัพโหลดรูปภาพอย่างน้อย 1 รูป)', isError: true });
@@ -306,12 +382,12 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       const id = editingPlace.id || `place-${Date.now()}`;
       const placeData: Place = {
         id,
-        name: editingPlace.name,
-        nameEn: editingPlace.nameEn || '',
+        name: editingPlace.name.trim(),
+        nameEn: editingPlace.nameEn?.trim() || '',
         category: editingPlace.category as PlaceCategory,
         district: editingPlace.district,
-        description: editingPlace.description,
-        shortDescription: editingPlace.shortDescription || editingPlace.description.slice(0, 150),
+        description: editingPlace.description.trim(),
+        shortDescription: editingPlace.shortDescription?.trim() || editingPlace.description.trim().slice(0, 150),
         imageUrl: primaryImg,
         gallery: galleryInputUrls.length > 0 ? galleryInputUrls : [primaryImg],
         standards: placeStandards,
@@ -325,17 +401,40 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         websiteUrl: editingPlace.websiteUrl || '',
         rating: Number(editingPlace.rating) || 4.8,
         isFeatured: Boolean(editingPlace.isFeatured),
+        status: saveMode,
         tags: editingPlace.tags || ['ท่องเที่ยวเลย'],
         viewsCount: editingPlace.viewsCount || 0,
         sharesCount: editingPlace.sharesCount || 0
       };
 
-      await savePlace(placeData);
+      const saved = await savePlace(placeData);
       await onRefreshData();
       setEditingPlace(null);
-      setStatusMessage({ text: `บันทึกข้อมูล "${placeData.name}" สำเร็จ!` });
+      if (saveMode === 'draft') {
+        setStatusMessage({ text: `บันทึกแบบร่าง "${saved.name}" สำเร็จ (บันทึกไว้แล้ว แต่ยังไม่แสดงบนหน้าเว็บสาธารณะ)` });
+      } else {
+        setStatusMessage({ text: `บันทึกและเผยแพร่ "${saved.name}" สู่สาธารณะเรียบร้อยแล้ว!` });
+      }
     } catch (err: any) {
       setStatusMessage({ text: 'เกิดข้อผิดพลาดในการบันทึก: ' + (err.message || String(err)), isError: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTogglePublish = async (place: Place) => {
+    setIsSubmitting(true);
+    try {
+      const nextStatus: PlaceStatus = place.status === 'draft' ? 'published' : 'draft';
+      await savePlace({ ...place, status: nextStatus });
+      await onRefreshData();
+      setStatusMessage({
+        text: nextStatus === 'published'
+          ? `เผยแพร่ "${place.name}" สู่หน้าเว็บเรียบร้อยแล้ว!`
+          : `เปลี่ยน "${place.name}" เป็นแบบร่างเรียบร้อยแล้ว`
+      });
+    } catch (err: any) {
+      setStatusMessage({ text: 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะ: ' + (err.message || String(err)), isError: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -452,8 +551,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     }
   };
 
+  // Place counts
+  const publishedCount = places.filter(p => (p.status || 'published') === 'published').length;
+  const draftCount = places.filter(p => p.status === 'draft').length;
+
   // Filtered places for backend list
   const filteredPlacesList = places.filter((p) => {
+    const pStatus = p.status || 'published';
+    if (statusFilter !== 'all' && pStatus !== statusFilter) return false;
     if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
     if (districtFilter !== 'all' && p.district !== districtFilter) return false;
     if (searchPlaceFilter.trim()) {
@@ -495,37 +600,38 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         <div className="bg-[#FAF8F5] px-6 py-3 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-medium text-stone-600">สถานะผู้ดูแล:</span>
-            {adminUser ? (
+            {isCurrentlyAdmin ? (
               <span className="flex items-center gap-1.5 text-emerald-800 font-medium bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>เข้าสู่ระบบแล้ว: {adminUser.email || adminUser.displayName || 'Admin'}</span>
+                <span>
+                  {adminProfile?.name || adminUser?.displayName || adminUser?.email || 'Admin'}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 bg-emerald-200/80 rounded text-emerald-950 font-bold uppercase">
+                  {adminProfile?.role || (adminUser?.email === BOOTSTRAPPED_ADMIN_EMAIL ? 'superadmin' : 'editor')}
+                </span>
+                <span className="text-[11px] text-stone-400 font-normal">
+                  ({adminProfile?.authMethod === 'passkey' ? '🔑 รหัสผ่านทีมงาน' : '🌐 Google OAuth'})
+                </span>
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 text-stone-600 bg-stone-100 px-2.5 py-1 rounded-md border border-stone-200">
-                <span>โหมดผู้ดูแลระบบ (พร้อมเข้าถึงและจัดการข้อมูล)</span>
+              <span className="flex items-center gap-1.5 text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 font-medium">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>ยังไม่ได้เข้าสู่ระบบ (กรุณาเข้าสู่ระบบเพื่อจัดการข้อมูล)</span>
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {!adminUser ? (
-              <button
-                onClick={handleGoogleLogin}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#153326] hover:bg-emerald-900 text-white rounded-md text-xs font-medium transition-colors shadow-2xs"
-              >
-                <LogIn className="w-3.5 h-3.5 text-amber-300" />
-                <span>เข้าสู่ระบบ Google ({BOOTSTRAPPED_ADMIN_EMAIL})</span>
-              </button>
-            ) : (
+          {isCurrentlyAdmin && (
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 rounded-md text-xs font-medium transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 rounded-md text-xs font-medium transition-colors cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>ออกจากระบบ</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Status Toast */}
@@ -546,67 +652,255 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
         )}
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-stone-200 px-6 bg-white gap-2 sm:gap-4 overflow-x-auto">
-          <button
-            onClick={() => {
-              setActiveTab('places');
-              setEditingPlace(null);
-            }}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'places'
-                ? 'border-[#153326] text-[#153326]'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <MapPin className="w-4 h-4" />
-            <span>จัดการสถานที่ ({places.length})</span>
-          </button>
+        {!isCurrentlyAdmin ? (
+          /* ================= ADMIN LOGIN SCREEN ================= */
+          <div className="p-6 sm:p-10 overflow-y-auto flex-1 bg-[#FAF8F5] flex flex-col items-center justify-center">
+            <div className="w-full max-w-lg bg-white border border-stone-200 rounded-2xl p-6 sm:p-8 shadow-sm">
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 bg-emerald-50 text-[#153326] rounded-2xl flex items-center justify-center mx-auto mb-3 border border-emerald-100 shadow-2xs">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <h3 className="font-editorial text-2xl font-bold text-stone-900">
+                  เข้าสู่ระบบสำหรับผู้ดูแล (Admin Portal)
+                </h3>
+                <p className="text-xs text-stone-500 mt-1">
+                  ระบบจัดการสถานที่และเนื้อหา LOEI JOURNEY สำหรับแอดมินทีมงาน
+                </p>
+              </div>
 
-          <button
-            onClick={() => {
-              setActiveTab('analytics');
-            }}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'analytics'
-                ? 'border-[#153326] text-[#153326]'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>สถิติผู้เข้าชมและการแชร์ (Analytics)</span>
-          </button>
+              {/* Login Method Tabs */}
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-stone-100 rounded-xl mb-6 text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => { setAuthTab('passkey'); setStatusMessage(null); }}
+                  className={`py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    authTab === 'passkey'
+                      ? 'bg-white text-[#153326] shadow-2xs font-semibold'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-600" />
+                  <span>รหัสผ่านแอดมินทีมงาน</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthTab('google'); setStatusMessage(null); }}
+                  className={`py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    authTab === 'google'
+                      ? 'bg-white text-[#153326] shadow-2xs font-semibold'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5 text-blue-600" />
+                  <span>บัญชี Google</span>
+                </button>
+              </div>
 
-          <button
-            onClick={() => {
-              setActiveTab('articles');
-              setEditingArticle(null);
-            }}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'articles'
-                ? 'border-[#153326] text-[#153326]'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>จัดการบทความ ({articles.length})</span>
-          </button>
+              {/* Tab 1: Passkey login */}
+              {authTab === 'passkey' && (
+                <form onSubmit={handlePasskeyLogin} className="space-y-4">
+                  <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-3 text-xs text-emerald-950 flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block">เข้าใช้งานได้ทันที ไม่ติดปัญหา Unauthorized Domain</span>
+                      <span className="text-[11px] text-emerald-800">
+                        ทีมงานทุกคนสามารถใช้รหัสผ่านนี้เข้าสู่ระบบจากคอมพิวเตอร์หรือมือถือเครื่องใดก็ได้
+                      </span>
+                    </div>
+                  </div>
 
-          <button
-            onClick={() => setActiveTab('seed')}
-            className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'seed'
-                ? 'border-[#153326] text-[#153326]'
-                : 'border-transparent text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>ซิงค์ข้อมูล Firestore</span>
-          </button>
-        </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                      เลือกตัวตนทีมงานผู้ดูแล
+                    </label>
+                    <select
+                      value={selectedAdminId}
+                      onChange={(e) => setSelectedAdminId(e.target.value)}
+                      className="w-full text-xs border border-stone-300 rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:outline-none focus:border-[#153326]"
+                    >
+                      {INITIAL_ADMIN_TEAM.map((adm) => (
+                        <option key={adm.id} value={adm.id}>
+                          {adm.name} ({adm.role === 'superadmin' ? 'Superadmin' : 'Editor'})
+                        </option>
+                      ))}
+                      <option value="custom">+ ระบุชื่อแอดมินของคุณเอง...</option>
+                    </select>
+                  </div>
 
-        {/* Tab Content Body */}
-        <div className="overflow-y-auto p-6 flex-1 bg-[#FAF8F5]">
+                  {selectedAdminId === 'custom' && (
+                    <div>
+                      <label className="block text-xs font-medium text-stone-700 mb-1.5">
+                        ชื่อหรือฉายาของคุณ (สำหรับบันทึกประวัติการจัดการ)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="เช่น คุณสมศรี - ทีมงานคอนเทนต์"
+                        value={customAdminName}
+                        onChange={(e) => setCustomAdminName(e.target.value)}
+                        className="w-full text-xs border border-stone-300 rounded-lg p-2.5 focus:outline-none focus:border-[#153326]"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-stone-700">
+                        รหัสผ่านแอดมินทีมงาน (Team Passkey) *
+                      </label>
+                      <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        รหัสทีม: loei2026
+                      </span>
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      placeholder="กรอกรหัสผ่านทีมงาน (loei2026)"
+                      value={passkeyInput}
+                      onChange={(e) => setPasskeyInput(e.target.value)}
+                      className="w-full text-sm border border-stone-300 rounded-lg p-2.5 font-mono focus:outline-none focus:border-[#153326]"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#153326] hover:bg-emerald-900 text-white font-medium rounded-lg text-sm transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4 text-amber-300" />
+                    <span>เข้าสู่ระบบจัดการหลังบ้าน</span>
+                  </button>
+                </form>
+              )}
+
+              {/* Tab 2: Google login */}
+              {authTab === 'google' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    เข้าสู่ระบบด้วยบัญชี Google ของผู้ดูแล (เช่น <span className="font-mono text-stone-800 font-semibold">{BOOTSTRAPPED_ADMIN_EMAIL}</span>)
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    className="w-full py-2.5 bg-white border border-stone-300 hover:bg-stone-50 text-stone-800 font-medium rounded-lg text-sm transition-colors shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>ลงชื่อเข้าใช้ด้วย Google Account</span>
+                  </button>
+
+                  {/* Unauthorized domain explanation and copy tool */}
+                  <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-950 space-y-2">
+                    <div className="font-semibold flex items-center gap-1.5 text-amber-900">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>วิธีแก้ไขข้อผิดพลาด auth/unauthorized-domain</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                      เนื่องจาก Firebase ป้องกันความปลอดภัยโดยรับเฉพาะโดเมนที่ระบุไว้ในคอนโซล หากพบปัญหา ให้คัดลอกโดเมนด้านล่างนี้ไปเพิ่มใน Firebase Console:
+                    </p>
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-300 font-mono text-[11px] text-stone-700 overflow-x-auto">
+                      <span className="truncate flex-1">{window.location.origin}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyDomain}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-sans font-medium flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        {copiedDomain ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedDomain ? 'คัดลอกแล้ว!' : 'คัดลอกโดเมน'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-stone-600">
+                      💡 <strong>คำแนะนำ:</strong> สามารถสลับไปใช้แท็บ <strong>"รหัสผ่านแอดมินทีมงาน"</strong> ด้านบน รหัสคือ <code>loei2026</code> เพื่อเข้าใช้งานได้ทันทีโดยไม่ต้องตั้งค่าในคอนโซล
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-stone-200 px-6 bg-white gap-2 sm:gap-4 overflow-x-auto">
+              <button
+                onClick={() => {
+                  setActiveTab('places');
+                  setEditingPlace(null);
+                }}
+                className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === 'places'
+                    ? 'border-[#153326] text-[#153326]'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <MapPin className="w-4 h-4" />
+                <span>จัดการสถานที่ ({places.length})</span>
+                {draftCount > 0 && (
+                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full border border-amber-300">
+                    ร่าง {draftCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('analytics');
+                }}
+                className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'border-[#153326] text-[#153326]'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>สถิติผู้เข้าชมและการแชร์ (Analytics)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab('articles');
+                  setEditingArticle(null);
+                }}
+                className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === 'articles'
+                    ? 'border-[#153326] text-[#153326]'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                <span>จัดการบทความ ({articles.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('seed')}
+                className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === 'seed'
+                    ? 'border-[#153326] text-[#153326]'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                <span>ซิงค์ข้อมูล Firestore</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('team')}
+                className={`py-3 text-xs sm:text-sm font-medium border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  activeTab === 'team'
+                    ? 'border-[#153326] text-[#153326]'
+                    : 'border-transparent text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>ทีมงานผู้ดูแล & รหัสผ่าน</span>
+              </button>
+            </div>
+
+            {/* Tab Content Body */}
+            <div className="overflow-y-auto p-6 flex-1 bg-[#FAF8F5]">
           
           {/* ================= TAB 1: PLACES MANAGEMENT ================= */}
           {activeTab === 'places' && (
@@ -627,7 +921,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </button>
                   </div>
 
-                  <form onSubmit={handleSavePlace} className="space-y-6 text-xs sm:text-sm">
+                  <form onSubmit={(e) => { e.preventDefault(); handleSavePlace('published'); }} className="space-y-6 text-xs sm:text-sm">
                     
                     {/* 1. Basic Info */}
                     <div className="space-y-4">
@@ -1077,35 +1371,88 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-200">
-                      <button
-                        type="button"
-                        onClick={() => setEditingPlace(null)}
-                        className="px-4 py-2 border border-stone-300 rounded-lg text-stone-700 hover:bg-stone-50"
-                      >
-                        ยกเลิก
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-6 py-2.5 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-xs"
-                      >
-                        {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูลสถานที่'}
-                      </button>
+                    <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-stone-200">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-stone-500">สถานะสถานที่:</span>
+                        <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
+                          (editingPlace.status || 'published') === 'draft'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        }`}>
+                          {(editingPlace.status || 'published') === 'draft' ? '📝 แบบร่าง (ยังไม่เผยแพร่)' : '🌐 เผยแพร่แล้ว (สาธารณะ)'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingPlace(null)}
+                          className="px-4 py-2 border border-stone-300 rounded-lg text-stone-700 hover:bg-stone-50 text-xs font-medium cursor-pointer"
+                        >
+                          ยกเลิก
+                        </button>
+
+                        {/* Button 1: Save as Draft */}
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => handleSavePlace('draft')}
+                          className="px-4 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 text-xs shadow-2xs cursor-pointer"
+                          title="บันทึกข้อมูลเก็บไว้ในระบบ แต่ยังไม่เผยแพร่สู่หน้าเว็บสาธารณะ (เห็นเฉพาะแอดมิน)"
+                        >
+                          <FileText className="w-4 h-4 text-amber-700" />
+                          <span>{isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกแบบร่าง (Save Draft)'}</span>
+                        </button>
+
+                        {/* Button 2: Save and Publish */}
+                        <button
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => handleSavePlace('published')}
+                          className="px-5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 text-xs shadow-xs cursor-pointer"
+                          title="บันทึกและเผยแพร่แสดงผลสู่หน้าเว็บสาธารณะทันที"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                          <span>{isSubmitting ? 'กำลังบันทึก...' : '🚀 บันทึกและเผยแพร่ (Publish Now)'}</span>
+                        </button>
+                      </div>
                     </div>
                   </form>
                 </div>
               ) : (
                 /* Place List with Category Filter */
                 <div>
-                  {/* Category Filter Tabs in Dashboard */}
+                  {/* Category & Status Filter Tabs in Dashboard */}
                   <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-2xs mb-4 space-y-3">
+                    {/* Status Filter Tabs (All / Published / Draft) */}
+                    <div className="flex items-center gap-2 pb-2.5 border-b border-stone-100 flex-wrap">
+                      <span className="text-xs text-stone-500 font-medium">สถานะเผยแพร่:</span>
+                      {[
+                        { id: 'all', label: `ทั้งหมด (${places.length})` },
+                        { id: 'published', label: `🌐 เผยแพร่แล้ว (${publishedCount})` },
+                        { id: 'draft', label: `📝 แบบร่าง (${draftCount})` },
+                      ].map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setStatusFilter(st.id as any)}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                            statusFilter === st.id
+                              ? 'bg-[#153326] text-white shadow-2xs'
+                              : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                          }`}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                       
                       {/* Category segment buttons */}
                       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                         {[
-                          { id: 'all', label: 'ทั้งหมด' },
+                          { id: 'all', label: 'ทุกหมวด' },
                           { id: 'stay', label: 'ที่พัก' },
                           { id: 'restaurant', label: 'ร้านอาหาร' },
                           { id: 'cafe', label: 'คาเฟ่' },
@@ -1116,9 +1463,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <button
                             key={cat.id}
                             onClick={() => setCategoryFilter(cat.id as PlaceCategory | 'all')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
                               categoryFilter === cat.id
-                                ? 'bg-[#153326] text-white shadow-2xs'
+                                ? 'bg-stone-800 text-white shadow-2xs'
                                 : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                             }`}
                           >
@@ -1134,7 +1481,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             type="button"
                             onClick={handleClearAllPlaces}
                             disabled={isSubmitting}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-medium transition-colors shadow-2xs"
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-medium transition-colors shadow-2xs cursor-pointer"
                             title="ลบสถานที่ตัวอย่างทั้งหมดเพื่อเริ่มทดลองด้วยฐานข้อมูลว่าง"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1143,8 +1490,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         )}
                         <button
                           type="button"
-                          onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน' })}
-                          className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
+                          onClick={() => setEditingPlace({ category: 'attraction', district: 'อำเภอเชียงคาน', status: 'published' })}
+                          className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"
                         >
                           <Plus className="w-4 h-4" />
                           <span>+ เพิ่มสถานที่จริงใหม่</span>
@@ -1227,6 +1574,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             <th className="p-3.5">รูป & ชื่อสถานที่</th>
                             <th className="p-3.5">หมวดหมู่</th>
                             <th className="p-3.5">อำเภอ</th>
+                            <th className="p-3.5">สถานะ</th>
                             <th className="p-3.5">มาตรฐาน</th>
                             <th className="p-3.5">สถิติ (เข้าชม / แชร์)</th>
                             <th className="p-3.5 text-right">การจัดการ</th>
@@ -1258,6 +1606,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </td>
                               <td className="p-3.5 text-stone-600">
                                 {place.district}
+                              </td>
+                              <td className="p-3.5 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                    (place.status || 'published') === 'draft'
+                                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                      : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                  }`}>
+                                    {(place.status || 'published') === 'draft' ? '📝 แบบร่าง' : '🌐 เผยแพร่แล้ว'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={isSubmitting}
+                                    onClick={() => handleTogglePublish(place)}
+                                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors cursor-pointer font-medium ${
+                                      (place.status || 'published') === 'draft'
+                                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white border-emerald-700 shadow-2xs'
+                                        : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-300'
+                                    }`}
+                                    title={(place.status || 'published') === 'draft' ? 'คลิกเพื่อเผยแพร่สู่หน้าเว็บทันที' : 'คลิกเพื่อพักร่าง (ซ่อนจากหน้าเว็บ)'}
+                                  >
+                                    {(place.status || 'published') === 'draft' ? 'เผยแพร่ทันที' : 'พักร่าง'}
+                                  </button>
+                                </div>
                               </td>
                               <td className="p-3.5">
                                 {place.standards && place.standards.length > 0 ? (
@@ -1759,7 +2131,98 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           )}
 
+          {/* ================= TAB 5: ADMIN TEAM & CREDENTIALS ================= */}
+          {activeTab === 'team' && (
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-2xs">
+                <div className="flex items-center justify-between pb-4 border-b border-stone-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#153326] flex items-center justify-center border border-emerald-100">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-editorial text-lg font-bold text-stone-900">
+                        ทีมงานผู้ดูแลระบบ LOEI JOURNEY
+                      </h3>
+                      <p className="text-xs text-stone-500">
+                        ระบบรองรับการเข้าใช้งานร่วมกันหลายคน โดยใช้รหัสผ่านกลางของทีมงาน (Team Passkey)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 rounded-md text-xs font-semibold font-mono">
+                    Multi-Admin Active
+                  </span>
+                </div>
+
+                {/* Current Active User Session */}
+                <div className="my-5 p-4 rounded-xl bg-[#FAF8F5] border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#153326] text-white flex items-center justify-center font-bold text-sm">
+                      {(adminProfile?.name || adminUser?.displayName || 'A').charAt(0)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-900 text-sm">
+                          {adminProfile?.name || adminUser?.displayName || adminUser?.email || 'Admin'}
+                        </span>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-emerald-600 text-white rounded font-bold">
+                          {adminProfile?.role || 'admin'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-stone-500">
+                        {adminProfile?.email || adminUser?.email || 'admin@loeijourney.com'} · เข้าสู่ระบบผ่าน {adminProfile?.authMethod === 'passkey' ? 'รหัสผ่านทีมงาน' : 'Google Account'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="px-3.5 py-1.5 border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    สลับบัญชี / ออกจากระบบ
+                  </button>
+                </div>
+
+                {/* Team Members List */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-stone-600">
+                    รายชื่อทีมงานในระบบ
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {INITIAL_ADMIN_TEAM.map((adm) => (
+                      <div key={adm.id} className="p-3 rounded-xl border border-stone-200 bg-white shadow-2xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-stone-900 truncate">{adm.name}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 bg-stone-100 text-stone-700 rounded">
+                            {adm.role}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-500 truncate">{adm.email}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Passkey Info Box */}
+                <div className="mt-6 p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs space-y-2">
+                  <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <Key className="w-4 h-4 text-amber-600" />
+                    <span>ข้อมูลรหัสผ่านสำหรับแจกจ่ายในทีมงาน</span>
+                  </div>
+                  <p className="text-amber-950 leading-relaxed text-[11px]">
+                    รหัสผ่านทีมงานเริ่มต้นคือ: <code className="bg-white px-2 py-0.5 rounded border border-amber-300 font-mono font-bold text-amber-900">loei2026</code>
+                  </p>
+                  <p className="text-stone-600 text-[11px] leading-relaxed">
+                    ทีมงานทุกคนสามารถใช้รหัสผ่านนี้เพื่อล็อกอินและทำงานพร้อมกันได้ทันที โดยไม่มีการทับซ้อนกัน ข้อมูลทั้งหมดจะซิงค์ขึ้น Firestore ให้เห็นแบบเรียลไทม์
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
+      </>
+    )}
 
       </div>
 

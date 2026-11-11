@@ -115,6 +115,13 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
           </>
         )}
 
+        {/* Draft indicator if viewing as admin */}
+        {place.status === 'draft' && (
+          <div className="absolute top-2.5 left-2.5 bg-amber-500 text-stone-950 font-bold text-[10px] tracking-wide px-2 py-0.5 rounded shadow-xs z-10 flex items-center gap-1 border border-amber-300">
+            <span>📝 แบบร่าง (Draft)</span>
+          </div>
+        )}
+
         {/* Minimal Editorial Category Stamp on top right */}
         <div className="absolute top-2.5 right-2.5 bg-stone-900/85 backdrop-blur-xs text-white text-[11px] font-sans px-2.5 py-1 rounded-sm shadow-xs z-10">
           {categoryLabels[place.category] || place.category}
