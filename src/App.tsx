@@ -8,6 +8,7 @@ import { Place, Article, PlaceCategory, PriceFilter, AdminProfile } from './type
 import {
   getPlaces,
   subscribePlaces,
+  getCachedPlaces,
   restoreSamplePlaces,
   getArticles,
   testConnection,
@@ -43,9 +44,9 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [places, setPlaces] = useState<Place[]>([]);
+  const [places, setPlaces] = useState<Place[]>(getCachedPlaces);
   const [articles, setArticles] = useState<Article[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [adminUser, setAdminUser] = useState<User | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(getActiveAdminSession());
 
@@ -94,6 +95,9 @@ export default function App() {
   useEffect(() => {
     testConnection();
     trackEvent('pageview', undefined, undefined, 'web');
+
+    // Load fresh data immediately
+    loadData();
 
     // Real-time synchronization of places from Firestore
     const unsubscribePlaces = subscribePlaces((livePlaces) => {
@@ -234,9 +238,9 @@ export default function App() {
     });
   }, [viewablePlaces, selectedCategory, selectedDistrict, priceFilter, hasStandardsOnly, searchQuery, currentTab]);
 
-  // Featured place of the week
+  // Featured place of the week: ONLY displayed when an admin explicitly checks "ไฮไลท์สถานที่แนะนำประจำสัปดาห์ (Featured)"
   const featuredPlace = useMemo(() => {
-    return viewablePlaces.find((p) => p.isFeatured && p.id === 'phu-tok-chiang-khan') || viewablePlaces[0];
+    return viewablePlaces.find((p) => Boolean(p.isFeatured)) || null;
   }, [viewablePlaces]);
 
   // Curated lists for home tab

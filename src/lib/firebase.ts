@@ -175,6 +175,19 @@ function removeDeletedPlaceId(id: string) {
   }
 }
 
+// Helper for local cached places
+export function getCachedPlaces(): Place[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
+    if (!raw) return [];
+    const list: Place[] = JSON.parse(raw);
+    const deleted = getDeletedPlaceIds();
+    return list.filter(p => !deleted.has(p.id));
+  } catch {
+    return [];
+  }
+}
+
 // Data fetching & persistence for Places
 export function subscribePlaces(callback: (places: Place[]) => void): () => void {
   const pathForOnSnapshot = 'places';
@@ -183,13 +196,31 @@ export function subscribePlaces(callback: (places: Place[]) => void): () => void
   const unsubscribe = onSnapshot(
     collection(db, pathForOnSnapshot),
     (snapshot) => {
-      const places: Place[] = [];
+      const fromFirestore: Place[] = [];
       snapshot.forEach(docSnap => {
         const id = docSnap.id;
         if (!deletedIds.has(id)) {
-          places.push({ id, ...(docSnap.data() as Omit<Place, 'id'>) });
+          fromFirestore.push({ id, ...(docSnap.data() as Omit<Place, 'id'>) });
         }
       });
+
+      // Merge with cached places to protect against transient empty snapshots
+      const cached = getCachedPlaces();
+      const placeMap = new Map<string, Place>();
+
+      // Seed with cached places
+      cached.forEach(p => {
+        if (!deletedIds.has(p.id)) {
+          placeMap.set(p.id, p);
+        }
+      });
+
+      // Authoritative Firestore items
+      fromFirestore.forEach(p => {
+        placeMap.set(p.id, p);
+      });
+
+      const places = Array.from(placeMap.values());
 
       // Sort by newest updated or created first
       places.sort((a, b) => {
@@ -208,18 +239,13 @@ export function subscribePlaces(callback: (places: Place[]) => void): () => void
       callback(places);
     },
     (error) => {
-      console.warn('Real-time subscription notice, using cached places:', error);
+      console.warn('Real-time subscription notice, serving cached places:', error);
       try {
-        const cached = localStorage.getItem(STORAGE_KEY_PLACES);
-        if (cached) {
-          callback(JSON.parse(cached));
-        } else {
-          callback([]);
-        }
+        const cached = getCachedPlaces();
+        callback(cached);
       } catch {
         callback([]);
       }
-      handleFirestoreError(error, OperationType.GET, pathForOnSnapshot);
     }
   );
 
@@ -298,7 +324,22 @@ export async function savePlace(place: Place): Promise<Place> {
 
   removeDeletedPlaceId(sanitizedId);
 
-  // 1. Persist to Firestore directly
+  // 1. Immediately update local cache for 0ms response and offline resilience
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
+    let list: Place[] = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex(p => p.id === sanitizedId);
+    if (idx >= 0) {
+      list[idx] = cleanPlace;
+    } else {
+      list.unshift(cleanPlace);
+    }
+    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
+  } catch (e) {
+    console.error(e);
+  }
+
+  // 2. Persist to Firestore directly
   const { id, ...data } = cleanPlace;
   try {
     await setDoc(doc(db, 'places', sanitizedId), {
@@ -312,21 +353,6 @@ export async function savePlace(place: Place): Promise<Place> {
       throw new Error('ขนาดรูปภาพรวมเกินขีดจำกัดของระบบคลาวด์ (1MB) กรุณาลองอัปโหลดใหม่อีกครั้ง');
     }
     throw new Error('บันทึกลงระบบคลาวด์ Firestore ล้มเหลว: ' + msg);
-  }
-
-  // 2. Update local cache for instant response
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
-    let list: Place[] = raw ? JSON.parse(raw) : [];
-    const idx = list.findIndex(p => p.id === sanitizedId);
-    if (idx >= 0) {
-      list[idx] = cleanPlace;
-    } else {
-      list.unshift(cleanPlace);
-    }
-    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
-  } catch (e) {
-    console.error(e);
   }
 
   return cleanPlace;

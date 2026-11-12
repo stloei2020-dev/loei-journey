@@ -921,7 +921,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </button>
                   </div>
 
-                  <form onSubmit={(e) => { e.preventDefault(); handleSavePlace(editingPlace.status === 'draft' ? 'draft' : 'published'); }} className="space-y-6 text-xs sm:text-sm">
+                  <form onSubmit={(e) => { e.preventDefault(); handleSavePlace('published'); }} className="space-y-6 text-xs sm:text-sm">
                     
                     {/* 1. Basic Info */}
                     <div className="space-y-4">
@@ -1370,90 +1370,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </label>
                       </div>
 
-                      {/* Explicit Publication Status Selector */}
-                      <div className="pt-3 border-t border-stone-200">
-                        <label className="block font-medium text-stone-700 mb-2">
-                          เลือกสถานะการเผยแพร่ข้อมูลสถานที่
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setEditingPlace({ ...editingPlace, status: 'draft' })}
-                            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
-                              (editingPlace.status || 'published') === 'draft'
-                                ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300'
-                                : 'bg-stone-50 border-stone-200 hover:bg-stone-100'
-                            }`}
-                          >
-                            <FileText className={`w-5 h-5 shrink-0 mt-0.5 ${
-                              (editingPlace.status || 'published') === 'draft' ? 'text-amber-700' : 'text-stone-400'
-                            }`} />
-                            <div>
-                              <span className="font-bold text-xs text-stone-900 block">
-                                📝 บันทึกแบบร่าง (Draft)
-                              </span>
-                              <span className="text-[11px] text-stone-500 leading-tight block mt-0.5">
-                                ซ่อนจากหน้าเว็บจริง บันทึกเก็บไว้ให้ทีมงานตรวจทานในระบบหลังบ้านเท่านั้น
-                              </span>
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditingPlace({ ...editingPlace, status: 'published' })}
-                            className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
-                              (editingPlace.status || 'published') === 'published'
-                                ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-300'
-                                : 'bg-stone-50 border-stone-200 hover:bg-stone-100'
-                            }`}
-                          >
-                            <Sparkles className={`w-5 h-5 shrink-0 mt-0.5 ${
-                              (editingPlace.status || 'published') === 'published' ? 'text-emerald-700' : 'text-stone-400'
-                            }`} />
-                            <div>
-                              <span className="font-bold text-xs text-stone-900 block">
-                                🌐 เผยแพร่ทันที (Published)
-                              </span>
-                              <span className="text-[11px] text-stone-500 leading-tight block mt-0.5">
-                                แสดงบนหน้าเว็บไซต์ LOEI JOURNEY ให้ผู้เข้าชมทั่วไปค้นหาและเปิดดูได้ทันที
-                              </span>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
-                    <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-stone-200">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-stone-500">สถานะที่เลือก:</span>
-                        <span className={`px-2.5 py-0.5 rounded text-xs font-semibold ${
-                          (editingPlace.status || 'published') === 'draft'
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                            : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                        }`}>
-                          {(editingPlace.status || 'published') === 'draft' ? '📝 แบบร่าง (ยังไม่เผยแพร่)' : '🌐 เผยแพร่แล้ว (สาธารณะ)'}
-                        </span>
-                      </div>
+                    <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200">
+                      <button
+                        type="button"
+                        onClick={() => setEditingPlace(null)}
+                        className="w-full sm:w-auto px-4 py-2 border border-stone-300 rounded-lg text-stone-700 hover:bg-stone-50 text-xs font-medium cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
 
-                      <div className="flex flex-wrap items-center justify-end gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingPlace(null)}
-                          className="px-4 py-2 border border-stone-300 rounded-lg text-stone-700 hover:bg-stone-50 text-xs font-medium cursor-pointer"
-                        >
-                          ยกเลิก
-                        </button>
-
+                      <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                         {/* Button 1: Save as Draft */}
                         <button
                           type="button"
                           disabled={isSubmitting}
                           onClick={() => handleSavePlace('draft')}
-                          className="px-4 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 text-xs shadow-2xs cursor-pointer"
+                          className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-xs shadow-2xs cursor-pointer"
                           title="บันทึกข้อมูลเก็บไว้ในระบบ แต่ยังไม่เผยแพร่สู่หน้าเว็บสาธารณะ (เห็นเฉพาะแอดมิน)"
                         >
                           <FileText className="w-4 h-4 text-amber-700" />
-                          <span>{isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกแบบร่าง (Save Draft)'}</span>
+                          <span>{isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกแบบร่าง (ยังไม่เผยแพร่)'}</span>
                         </button>
 
                         {/* Button 2: Save and Publish */}
@@ -1461,11 +1399,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           type="button"
                           disabled={isSubmitting}
                           onClick={() => handleSavePlace('published')}
-                          className="px-5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 text-xs shadow-xs cursor-pointer"
+                          className="px-5 py-2.5 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-xs shadow-xs cursor-pointer"
                           title="บันทึกและเผยแพร่แสดงผลสู่หน้าเว็บสาธารณะทันที"
                         >
                           <Sparkles className="w-4 h-4 text-amber-300" />
-                          <span>{isSubmitting ? 'กำลังบันทึก...' : '🚀 บันทึกและเผยแพร่ (Publish Now)'}</span>
+                          <span>{isSubmitting ? 'กำลังบันทึก...' : '🚀 บันทึกและเผยแพร่ (แสดงบนเว็บทันที)'}</span>
                         </button>
                       </div>
                     </div>
