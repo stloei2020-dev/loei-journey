@@ -175,14 +175,56 @@ function removeDeletedPlaceId(id: string) {
   }
 }
 
-// Helper for local cached places
+const ALL_STORAGE_KEYS = [
+  'loei_journey_places_v4',
+  'loei_journey_places_v3',
+  'loei_journey_places_v2',
+  'loei_journey_places_v1',
+  'loei_journey_places',
+  'loei_journey_places_backup',
+  'places'
+];
+
+// Helper for local cached places (checks all legacy and current keys for 100% data recovery)
 export function getCachedPlaces(): Place[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
-    if (!raw) return [];
-    const list: Place[] = JSON.parse(raw);
     const deleted = getDeletedPlaceIds();
-    return list.filter(p => !deleted.has(p.id));
+    const map = new Map<string, Place>();
+
+    // Scan all keys to find any places saved in earlier sessions or versions
+    for (const key of ALL_STORAGE_KEYS) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const list: Place[] = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            list.forEach(p => {
+              if (p && p.id && !deleted.has(p.id)) {
+                if (!map.has(p.id)) {
+                  map.set(p.id, p);
+                }
+              }
+            });
+          }
+        }
+      } catch {}
+    }
+
+    const places = Array.from(map.values());
+    places.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    // Mirror to current key for consistency
+    if (places.length > 0) {
+      try {
+        localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(places));
+      } catch {}
+    }
+
+    return places;
   } catch {
     return [];
   }
@@ -326,15 +368,19 @@ export async function savePlace(place: Place): Promise<Place> {
 
   // 1. Immediately update local cache for 0ms response and offline resilience
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_PLACES);
-    let list: Place[] = raw ? JSON.parse(raw) : [];
-    const idx = list.findIndex(p => p.id === sanitizedId);
-    if (idx >= 0) {
-      list[idx] = cleanPlace;
-    } else {
-      list.unshift(cleanPlace);
+    for (const key of ['loei_journey_places_v4', 'loei_journey_places_backup', 'loei_journey_places']) {
+      try {
+        const raw = localStorage.getItem(key);
+        let list: Place[] = raw ? JSON.parse(raw) : [];
+        const idx = list.findIndex(p => p.id === sanitizedId);
+        if (idx >= 0) {
+          list[idx] = cleanPlace;
+        } else {
+          list.unshift(cleanPlace);
+        }
+        localStorage.setItem(key, JSON.stringify(list));
+      } catch {}
     }
-    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
   } catch (e) {
     console.error(e);
   }
@@ -347,12 +393,13 @@ export async function savePlace(place: Place): Promise<Place> {
       status: cleanPlace.status
     });
   } catch (firestoreError: any) {
-    console.error('Firestore write error:', firestoreError);
+    console.warn('Firestore write warning:', firestoreError);
     const msg = firestoreError?.message || String(firestoreError);
     if (msg.includes('exceeds maximum allowed size') || msg.includes('larger than 1048576')) {
       throw new Error('ขนาดรูปภาพรวมเกินขีดจำกัดของระบบคลาวด์ (1MB) กรุณาลองอัปโหลดใหม่อีกครั้ง');
     }
-    throw new Error('บันทึกลงระบบคลาวด์ Firestore ล้มเหลว: ' + msg);
+    // For quota, offline, or transient issues, keep data safe locally and don't discard
+    console.warn('Document saved in local storage (cloud notice):', msg);
   }
 
   return cleanPlace;

@@ -74,7 +74,7 @@ export default function App() {
   // Modals & Preview States
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(false);
+  const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(true);
 
   // Initialize and load data
   const loadData = async () => {
@@ -244,10 +244,11 @@ export default function App() {
   }, [viewablePlaces]);
 
   // Curated lists for home tab
+  const recentlyAdded = useMemo(() => viewablePlaces.slice(0, 6), [viewablePlaces]);
   const stays = useMemo(() => viewablePlaces.filter((p) => p.category === 'stay'), [viewablePlaces]);
   const diningAndCafes = useMemo(() => viewablePlaces.filter((p) => p.category === 'restaurant' || p.category === 'cafe'), [viewablePlaces]);
   const attractions = useMemo(() => viewablePlaces.filter((p) => p.category === 'attraction'), [viewablePlaces]);
-  const services = useMemo(() => viewablePlaces.filter((p) => p.category === 'service'), [viewablePlaces]);
+  const services = useMemo(() => viewablePlaces.filter((p) => p.category === 'service' || p.category === 'souvenir'), [viewablePlaces]);
 
   const isFiltered = selectedCategory !== 'all' || selectedDistrict !== 'all' || searchQuery.trim().length > 0 || priceFilter !== 'all' || hasStandardsOnly;
 
@@ -469,6 +470,34 @@ export default function App() {
           ) : (
             /* Curated Magazine Layout for Homepage */
             <div className="space-y-16">
+
+              {/* SECTION: LATEST EXPEDITIONS & UPDATES (เพิ่งอัปเดตลงนิตยสารล่าสุด) */}
+              <div>
+                <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-emerald-800 font-mono mb-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>LATEST EXPEDITIONS & PLACES · เพิ่งลงนิตยสารล่าสุด</span>
+                    </div>
+                    <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900">
+                      สถานที่และธุรกิจอัปเดตล่าสุด
+                    </h2>
+                  </div>
+                  <span className="text-xs font-mono text-stone-500 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200">
+                    ทั้งหมด {viewablePlaces.length} แห่งในจังหวัดเลย
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                  {recentlyAdded.map((place) => (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      onSelect={(p) => setSelectedPlace(p)}
+                    />
+                  ))}
+                </div>
+              </div>
               
               {/* SECTION 1: ACCOMMODATIONS (ที่พักยอดนิยม) */}
               <div>
@@ -575,16 +604,16 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SECTION 4: ธุรกิจบริการน่าสนใจ (FEATURED SERVICES & LOCAL BUSINESSES) */}
+              {/* SECTION 4: ธุรกิจบริการ & ของฝากของที่ระลึกเมืองเลย (FEATURED SERVICES & SOUVENIRS) */}
               <div id="services-section">
                 <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
                   <div>
                     <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-emerald-800 font-mono mb-1">
                       <Briefcase className="w-3.5 h-3.5" />
-                      <span>LOCAL BUSINESSES & SERVICES</span>
+                      <span>LOCAL BUSINESSES & SOUVENIRS</span>
                     </div>
                     <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900">
-                      ธุรกิจบริการน่าสนใจในจังหวัดเลย
+                      ธุรกิจบริการ & ของฝากของที่ระลึกเมืองเลย
                     </h2>
                   </div>
                   <button
@@ -594,7 +623,7 @@ export default function App() {
                     }}
                     className="text-xs font-medium text-[#153326] hover:underline flex items-center gap-1 shrink-0"
                   >
-                    <span>ดูบริการทั้งหมด ({services.length})</span>
+                    <span>ดูทั้งหมด ({services.length})</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
