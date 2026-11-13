@@ -17,7 +17,9 @@ import {
   increment,
   deleteDoc,
   getDocFromServer,
-  onSnapshot
+  onSnapshot,
+  query,
+  limit
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Place, Article, AnalyticsEvent, AnalyticsSummary, AdminProfile, PlaceStatus } from '../types';
@@ -32,10 +34,161 @@ export const googleProvider = new GoogleAuthProvider();
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'st.loei2020@gmail.com';
 export const DEFAULT_ADMIN_PASSKEY = 'loei2026';
 
+export type CloudSyncStatus = 'syncing' | 'connected' | 'quota_exceeded' | 'offline';
+
+let currentCloudStatus: CloudSyncStatus = 'syncing';
+const cloudStatusListeners = new Set<(status: CloudSyncStatus) => void>();
+
+export function getCloudSyncStatus(): CloudSyncStatus {
+  return currentCloudStatus;
+}
+
+function setCloudSyncStatus(status: CloudSyncStatus) {
+  if (currentCloudStatus !== status) {
+    currentCloudStatus = status;
+    cloudStatusListeners.forEach((cb) => {
+      try {
+        cb(status);
+      } catch {}
+    });
+  }
+}
+
+export function subscribeCloudSyncStatus(cb: (status: CloudSyncStatus) => void): () => void {
+  cloudStatusListeners.add(cb);
+  cb(currentCloudStatus);
+  return () => {
+    cloudStatusListeners.delete(cb);
+  };
+}
+
+export function getFirestoreUpgradeUrl(): string {
+  return `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId}/data?openUpgradeDialog=true`;
+}
+
+function isQuotaError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('Free daily read units')
+  );
+}
+
+function isPermissionError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  return code === 'permission-denied' || msg.includes('Missing or insufficient permissions');
+}
+
 const STORAGE_KEY_PLACES = 'loei_journey_places_v4';
 const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v4';
+const STORAGE_KEY_PENDING_SYNC = 'loei_journey_pending_sync_ids_v4';
 const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v4';
 const STORAGE_KEY_ADMIN_SESSION = 'loei_journey_admin_session_v4';
+
+// IndexedDB helper for high-capacity local storage (no 5MB localStorage limit for base64 photos)
+const IDB_NAME = 'loei_journey_idb';
+const IDB_STORE = 'places';
+
+function openPlacesIDB(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const dbInst = req.result;
+        if (!dbInst.objectStoreNames.contains(IDB_STORE)) {
+          dbInst.createObjectStore(IDB_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function idbGetAllPlaces(): Promise<Place[]> {
+  const dbInst = await openPlacesIDB();
+  if (!dbInst) return [];
+  return new Promise((resolve) => {
+    try {
+      const tx = dbInst.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+async function idbPutPlace(place: Place): Promise<void> {
+  const dbInst = await openPlacesIDB();
+  if (!dbInst) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = dbInst.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(place);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function idbPutManyPlaces(places: Place[]): Promise<void> {
+  const dbInst = await openPlacesIDB();
+  if (!dbInst || places.length === 0) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = dbInst.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      places.forEach((p) => store.put(p));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function idbDeletePlace(id: string): Promise<void> {
+  const dbInst = await openPlacesIDB();
+  if (!dbInst) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = dbInst.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function idbClearAllPlaces(): Promise<void> {
+  const dbInst = await openPlacesIDB();
+  if (!dbInst) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = dbInst.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
 
 // Predefined multi-user admin team
 export const INITIAL_ADMIN_TEAM: AdminProfile[] = [
@@ -138,8 +291,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 export async function testConnection(): Promise<void> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    setCloudSyncStatus('connected');
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
+    if (isQuotaError(error)) {
+      setCloudSyncStatus('quota_exceeded');
+    } else if (error instanceof Error && error.message.includes('the client is offline')) {
+      setCloudSyncStatus('offline');
       console.warn('Firebase connection: Client is offline or Firestore initializing.');
     }
   }
@@ -175,6 +332,29 @@ function removeDeletedPlaceId(id: string) {
   }
 }
 
+// Track IDs saved locally that might still need cloud push if quota was hit
+function getPendingSyncIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PENDING_SYNC);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function markPendingSync(id: string, pending: boolean) {
+  try {
+    const set = getPendingSyncIds();
+    if (pending) set.add(id);
+    else set.delete(id);
+    localStorage.setItem(STORAGE_KEY_PENDING_SYNC, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+export function getPendingSyncCount(): number {
+  return getPendingSyncIds().size;
+}
+
 const ALL_STORAGE_KEYS = [
   'loei_journey_places_v4',
   'loei_journey_places_v3',
@@ -185,13 +365,12 @@ const ALL_STORAGE_KEYS = [
   'places'
 ];
 
-// Helper for local cached places (checks all legacy and current keys for 100% data recovery)
+// Synchronous localStorage cache read (for instant 0ms initial React render)
 export function getCachedPlaces(): Place[] {
   try {
     const deleted = getDeletedPlaceIds();
     const map = new Map<string, Place>();
 
-    // Scan all keys to find any places saved in earlier sessions or versions
     for (const key of ALL_STORAGE_KEYS) {
       try {
         const raw = localStorage.getItem(key);
@@ -199,10 +378,8 @@ export function getCachedPlaces(): Place[] {
           const list: Place[] = JSON.parse(raw);
           if (Array.isArray(list)) {
             list.forEach(p => {
-              if (p && p.id && !deleted.has(p.id)) {
-                if (!map.has(p.id)) {
-                  map.set(p.id, p);
-                }
+              if (p && p.id && !deleted.has(p.id) && !map.has(p.id)) {
+                map.set(p.id, p);
               }
             });
           }
@@ -217,16 +394,63 @@ export function getCachedPlaces(): Place[] {
       return timeB - timeA;
     });
 
-    // Mirror to current key for consistency
-    if (places.length > 0) {
-      try {
-        localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(places));
-      } catch {}
-    }
-
     return places;
   } catch {
     return [];
+  }
+}
+
+// Asynchronous full local load (IndexedDB + localStorage) to overcome 5MB localStorage limit
+export async function getLocalPlacesAsync(): Promise<Place[]> {
+  const deleted = getDeletedPlaceIds();
+  const [idbList, lsList] = await Promise.all([
+    idbGetAllPlaces(),
+    Promise.resolve(getCachedPlaces())
+  ]);
+
+  const map = new Map<string, Place>();
+  lsList.forEach(p => {
+    if (p && p.id && !deleted.has(p.id)) map.set(p.id, p);
+  });
+  idbList.forEach(p => {
+    if (p && p.id && !deleted.has(p.id)) {
+      const existing = map.get(p.id);
+      if (!existing) {
+        map.set(p.id, p);
+      } else {
+        const tNew = new Date(p.updatedAt || p.createdAt || 0).getTime();
+        const tOld = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        if (tNew >= tOld) map.set(p.id, p);
+      }
+    }
+  });
+
+  const merged = Array.from(map.values());
+  merged.sort((a, b) => {
+    const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+
+  // Backfill IndexedDB if items came from legacy localStorage
+  if (merged.length > 0) {
+    idbPutManyPlaces(merged).catch(() => {});
+  }
+
+  return merged;
+}
+
+function saveSingleKeyLocalStorageCache(places: Place[]) {
+  try {
+    // Store only in the single primary key (avoid 3x duplication that blows past 5MB limit)
+    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(places));
+  } catch {
+    // If localStorage hits 5MB due to many photos, IndexedDB still holds 100% of items!
+    // Store lightweight subset in localStorage so initial render still has latest items
+    try {
+      const compact = places.slice(0, 8);
+      localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(compact));
+    } catch {}
   }
 }
 
@@ -235,9 +459,17 @@ export function subscribePlaces(callback: (places: Place[]) => void): () => void
   const pathForOnSnapshot = 'places';
   const deletedIds = getDeletedPlaceIds();
 
+  // Immediately deliver full IndexedDB + localStorage list
+  getLocalPlacesAsync().then((localPlaces) => {
+    if (localPlaces.length > 0) {
+      callback(localPlaces);
+    }
+  });
+
   const unsubscribe = onSnapshot(
     collection(db, pathForOnSnapshot),
-    (snapshot) => {
+    async (snapshot) => {
+      setCloudSyncStatus('connected');
       const fromFirestore: Place[] = [];
       snapshot.forEach(docSnap => {
         const id = docSnap.id;
@@ -246,48 +478,55 @@ export function subscribePlaces(callback: (places: Place[]) => void): () => void
         }
       });
 
-      // Merge with cached places to protect against transient empty snapshots
-      const cached = getCachedPlaces();
+      const localPlaces = await getLocalPlacesAsync();
       const placeMap = new Map<string, Place>();
 
-      // Seed with cached places
-      cached.forEach(p => {
+      // Preserve locally saved items (including any unsynced or recent additions)
+      localPlaces.forEach(p => {
         if (!deletedIds.has(p.id)) {
           placeMap.set(p.id, p);
         }
       });
 
-      // Authoritative Firestore items
+      // Overlay Firestore docs (keeping newer local edit if timestamp is newer)
       fromFirestore.forEach(p => {
-        placeMap.set(p.id, p);
+        const existing = placeMap.get(p.id);
+        if (!existing) {
+          placeMap.set(p.id, p);
+        } else {
+          const tCloud = new Date(p.updatedAt || p.createdAt || 0).getTime();
+          const tLocal = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+          if (tCloud >= tLocal) {
+            placeMap.set(p.id, p);
+          }
+        }
       });
 
       const places = Array.from(placeMap.values());
-
-      // Sort by newest updated or created first
       places.sort((a, b) => {
         const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
         const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
         return timeB - timeA;
       });
 
-      // Update local storage cache
-      try {
-        localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(places));
-      } catch (err) {
-        console.warn('Local storage cache update failed:', err);
-      }
+      idbPutManyPlaces(places).catch(() => {});
+      saveSingleKeyLocalStorageCache(places);
 
       callback(places);
     },
-    (error) => {
-      console.warn('Real-time subscription notice, serving cached places:', error);
-      try {
-        const cached = getCachedPlaces();
-        callback(cached);
-      } catch {
-        callback([]);
+    async (error) => {
+      if (isPermissionError(error)) {
+        handleFirestoreError(error, OperationType.GET, pathForOnSnapshot);
       }
+      if (isQuotaError(error)) {
+        setCloudSyncStatus('quota_exceeded');
+        console.warn('Firestore daily read quota exceeded — serving full local IndexedDB/cache.');
+      } else {
+        setCloudSyncStatus('offline');
+        console.warn('Real-time subscription notice, serving local places:', error);
+      }
+      const localPlaces = await getLocalPlacesAsync();
+      callback(localPlaces);
     }
   );
 
@@ -300,27 +539,27 @@ export async function getPlaces(): Promise<Place[]> {
 
   try {
     const snapshot = await getDocs(collection(db, 'places'));
+    setCloudSyncStatus('connected');
     snapshot.forEach(docSnap => {
       const data = docSnap.data() as Omit<Place, 'id'>;
       firestorePlacesMap.set(docSnap.id, { id: docSnap.id, ...data });
     });
   } catch (error) {
-    console.warn('Note reading from Firestore, using local cache:', error);
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.GET, 'places');
+    }
+    if (isQuotaError(error)) {
+      setCloudSyncStatus('quota_exceeded');
+      console.warn('Firestore daily read quota exceeded during getPlaces, falling back to local DB.');
+    } else {
+      console.warn('Note reading from Firestore, using local cache:', error);
+    }
   }
 
-  // Also check localStorage cache for user added/edited places
-  let localCachePlaces: Place[] = [];
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY_PLACES);
-    if (cached) {
-      localCachePlaces = JSON.parse(cached);
-    }
-  } catch {}
-
-  // Merge map: Local Cache -> Firestore
+  const localPlaces = await getLocalPlacesAsync();
   const mergedMap = new Map<string, Place>();
 
-  localCachePlaces.forEach(p => {
+  localPlaces.forEach(p => {
     if (!deletedIds.has(p.id)) {
       mergedMap.set(p.id, p);
     }
@@ -328,21 +567,28 @@ export async function getPlaces(): Promise<Place[]> {
 
   firestorePlacesMap.forEach((p, id) => {
     if (!deletedIds.has(id)) {
-      mergedMap.set(id, p);
+      const existing = mergedMap.get(id);
+      if (!existing) {
+        mergedMap.set(id, p);
+      } else {
+        const tCloud = new Date(p.updatedAt || p.createdAt || 0).getTime();
+        const tLocal = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        if (tCloud >= tLocal) {
+          mergedMap.set(id, p);
+        }
+      }
     }
   });
 
   const result = Array.from(mergedMap.values());
-  // Sort: newest first
   result.sort((a, b) => {
     const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
     const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
     return timeB - timeA;
   });
 
-  try {
-    localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(result));
-  } catch {}
+  idbPutManyPlaces(result).catch(() => {});
+  saveSingleKeyLocalStorageCache(result);
 
   return result;
 }
@@ -366,24 +612,11 @@ export async function savePlace(place: Place): Promise<Place> {
 
   removeDeletedPlaceId(sanitizedId);
 
-  // 1. Immediately update local cache for 0ms response and offline resilience
-  try {
-    for (const key of ['loei_journey_places_v4', 'loei_journey_places_backup', 'loei_journey_places']) {
-      try {
-        const raw = localStorage.getItem(key);
-        let list: Place[] = raw ? JSON.parse(raw) : [];
-        const idx = list.findIndex(p => p.id === sanitizedId);
-        if (idx >= 0) {
-          list[idx] = cleanPlace;
-        } else {
-          list.unshift(cleanPlace);
-        }
-        localStorage.setItem(key, JSON.stringify(list));
-      } catch {}
-    }
-  } catch (e) {
-    console.error(e);
-  }
+  // 1. Immediately save to IndexedDB (unlimited photo storage) + single localStorage key
+  await idbPutPlace(cleanPlace);
+  const existingLocal = await getLocalPlacesAsync();
+  const nextList = [cleanPlace, ...existingLocal.filter(p => p.id !== sanitizedId)];
+  saveSingleKeyLocalStorageCache(nextList);
 
   // 2. Persist to Firestore directly
   const { id, ...data } = cleanPlace;
@@ -392,30 +625,57 @@ export async function savePlace(place: Place): Promise<Place> {
       ...data,
       status: cleanPlace.status
     });
+    markPendingSync(sanitizedId, false);
   } catch (firestoreError: any) {
     console.warn('Firestore write warning:', firestoreError);
     const msg = firestoreError?.message || String(firestoreError);
     if (msg.includes('exceeds maximum allowed size') || msg.includes('larger than 1048576')) {
       throw new Error('ขนาดรูปภาพรวมเกินขีดจำกัดของระบบคลาวด์ (1MB) กรุณาลองอัปโหลดใหม่อีกครั้ง');
     }
-    // For quota, offline, or transient issues, keep data safe locally and don't discard
-    console.warn('Document saved in local storage (cloud notice):', msg);
+    markPendingSync(sanitizedId, true);
+    if (isQuotaError(firestoreError)) {
+      setCloudSyncStatus('quota_exceeded');
+    }
+    console.warn('Document saved safely in IndexedDB/local cache (cloud notice):', msg);
   }
 
   return cleanPlace;
 }
 
-export async function deletePlace(id: string): Promise<void> {
-  const path = `places/${id}`;
-  addDeletedPlaceId(id);
+export async function retrySyncPendingPlaces(): Promise<{ synced: number; failed: number }> {
+  const pending = getPendingSyncIds();
+  if (pending.size === 0) return { synced: 0, failed: 0 };
 
-  // Update local cache immediately so deleted item disappears reliably
+  const allLocal = await getLocalPlacesAsync();
+  let synced = 0;
+  let failed = 0;
+
+  for (const place of allLocal) {
+    if (!pending.has(place.id)) continue;
+    try {
+      const { id, ...data } = place;
+      await setDoc(doc(db, 'places', id), { ...data, status: place.status || 'published' });
+      markPendingSync(id, false);
+      synced++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { synced, failed };
+}
+
+export async function deletePlace(id: string): Promise<void> {
+  addDeletedPlaceId(id);
+  markPendingSync(id, false);
+
+  await idbDeletePlace(id);
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PLACES);
     if (raw) {
       let list: Place[] = JSON.parse(raw);
       list = list.filter(p => p.id !== id);
-      localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify(list));
+      saveSingleKeyLocalStorageCache(list);
     }
   } catch (e) {
     console.error(e);
@@ -430,9 +690,10 @@ export async function deletePlace(id: string): Promise<void> {
 }
 
 export async function clearAllPlaces(): Promise<void> {
-  // Clear local caches
+  await idbClearAllPlaces();
   localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify([]));
   localStorage.removeItem(STORAGE_KEY_DELETED);
+  localStorage.removeItem(STORAGE_KEY_PENDING_SYNC);
 
   // Clear Firestore places
   try {
@@ -447,6 +708,7 @@ export async function clearAllPlaces(): Promise<void> {
 export async function restoreSamplePlaces(): Promise<number> {
   localStorage.removeItem(STORAGE_KEY_DELETED);
   localStorage.removeItem(STORAGE_KEY_PLACES);
+  await idbClearAllPlaces();
   for (const place of SAMPLE_PLACES) {
     await savePlace(place);
   }
@@ -462,9 +724,15 @@ export async function getArticles(): Promise<Article[]> {
       snapshot.forEach(docSnap => {
         articles.push({ id: docSnap.id, ...(docSnap.data() as Omit<Article, 'id'>) });
       });
+      try {
+        localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(articles));
+      } catch {}
       return articles;
     }
   } catch (error) {
+    if (isQuotaError(error)) {
+      setCloudSyncStatus('quota_exceeded');
+    }
     console.warn('Note reading articles from Firestore:', error);
   }
 
@@ -556,7 +824,7 @@ export async function trackEvent(
 export async function getAnalyticsSummary(allPlaces: Place[]): Promise<AnalyticsSummary> {
   let events: AnalyticsEvent[] = [];
   try {
-    const snap = await getDocs(collection(db, 'analytics'));
+    const snap = await getDocs(query(collection(db, 'analytics'), limit(200)));
     snap.forEach(d => {
       events.push(d.data() as AnalyticsEvent);
     });

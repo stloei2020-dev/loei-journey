@@ -18,7 +18,10 @@ import {
   signOut,
   User,
   getActiveAdminSession,
-  clearAdminSession
+  clearAdminSession,
+  subscribeCloudSyncStatus,
+  getFirestoreUpgradeUrl,
+  CloudSyncStatus
 } from './lib/firebase';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -75,8 +78,10 @@ export default function App() {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(true);
+  const [showAllRecent, setShowAllRecent] = useState<boolean>(true);
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('syncing');
 
-  // Initialize and load data
+  // Refresh data on demand (e.g. after Admin save/delete)
   const loadData = async () => {
     try {
       const [fetchedPlaces, fetchedArticles] = await Promise.all([
@@ -96,16 +101,16 @@ export default function App() {
     testConnection();
     trackEvent('pageview', undefined, undefined, 'web');
 
-    // Load fresh data immediately
-    loadData();
+    // Subscribe to cloud sync / quota status
+    const unsubscribeCloud = subscribeCloudSyncStatus(setCloudStatus);
 
-    // Real-time synchronization of places from Firestore
+    // Single real-time subscription (immediately delivers IndexedDB + cache, then syncs Firestore)
     const unsubscribePlaces = subscribePlaces((livePlaces) => {
       setPlaces(livePlaces);
       setLoading(false);
     });
 
-    // Load initial articles
+    // Load initial articles once (avoid redundant Firestore reads)
     getArticles()
       .then((arts) => setArticles(arts))
       .catch((err) => console.error(err));
@@ -115,6 +120,7 @@ export default function App() {
     });
 
     return () => {
+      unsubscribeCloud();
       unsubscribePlaces();
       unsubscribeAuth();
     };
@@ -244,7 +250,10 @@ export default function App() {
   }, [viewablePlaces]);
 
   // Curated lists for home tab
-  const recentlyAdded = useMemo(() => viewablePlaces.slice(0, 6), [viewablePlaces]);
+  const recentlyAdded = useMemo(
+    () => (showAllRecent ? viewablePlaces : viewablePlaces.slice(0, 6)),
+    [viewablePlaces, showAllRecent]
+  );
   const stays = useMemo(() => viewablePlaces.filter((p) => p.category === 'stay'), [viewablePlaces]);
   const diningAndCafes = useMemo(() => viewablePlaces.filter((p) => p.category === 'restaurant' || p.category === 'cafe'), [viewablePlaces]);
   const attractions = useMemo(() => viewablePlaces.filter((p) => p.category === 'attraction'), [viewablePlaces]);
@@ -307,6 +316,28 @@ export default function App() {
             >
               เปิดแดชบอร์ดจัดการข้อมูล &rarr;
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud Quota Notice Banner for Admin when Firestore Free Daily Read Limit is Reached */}
+      {isCurrentlyAdmin && cloudStatus === 'quota_exceeded' && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-950 px-4 py-2.5 text-xs">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-amber-800">⚠️ โควต้าอ่านข้อมูลฟรีรายวันของ Cloud Firestore เต็มชั่วคราว:</span>
+              <span>
+                ระบบกำลังแสดงข้อมูลจากหน่วยความจำภายในเครื่องนี้ ข้อมูลที่เพิ่มจากเครื่อง/เบราว์เซอร์อื่นจะซิงค์ครบเมื่อโควต้ารีเซ็ต (~07:00 น.) หรือหลังอัปเกรดแพ็กเกจฐานข้อมูล
+              </span>
+            </div>
+            <a
+              href={getFirestoreUpgradeUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium shrink-0 transition-colors"
+            >
+              ตรวจสอบ / อัปเกรด Firestore &rarr;
+            </a>
           </div>
         </div>
       )}
@@ -473,19 +504,30 @@ export default function App() {
 
               {/* SECTION: LATEST EXPEDITIONS & UPDATES (เพิ่งอัปเดตลงนิตยสารล่าสุด) */}
               <div>
-                <div className="flex items-end justify-between mb-8 pb-3 border-b border-stone-200">
+                <div className="flex flex-wrap items-end justify-between gap-3 mb-8 pb-3 border-b border-stone-200">
                   <div>
                     <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-emerald-800 font-mono mb-1">
                       <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>LATEST EXPEDITIONS & PLACES · เพิ่งลงนิตยสารล่าสุด</span>
+                      <span>LATEST EXPEDITIONS & PLACES · สถานที่ทั้งหมดในระบบ</span>
                     </div>
                     <h2 className="font-editorial text-2xl sm:text-3xl font-bold text-stone-900">
-                      สถานที่และธุรกิจอัปเดตล่าสุด
+                      สถานที่และธุรกิจอัปเดตล่าสุด ({viewablePlaces.length} แห่ง)
                     </h2>
                   </div>
-                  <span className="text-xs font-mono text-stone-500 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200">
-                    ทั้งหมด {viewablePlaces.length} แห่งในจังหวัดเลย
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {viewablePlaces.length > 6 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllRecent(!showAllRecent)}
+                        className="text-xs font-medium text-[#153326] hover:underline px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full cursor-pointer"
+                      >
+                        {showAllRecent ? 'ย่อเหลือ 6 รายการล่าสุด' : `แสดงทั้งหมด (${viewablePlaces.length} แห่ง)`}
+                      </button>
+                    )}
+                    <span className="text-xs font-mono text-stone-500 bg-stone-100 px-2.5 py-1 rounded-full border border-stone-200">
+                      กำลังแสดง {recentlyAdded.length}/{viewablePlaces.length} แห่ง
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">

@@ -20,7 +20,12 @@ import {
   DEFAULT_ADMIN_PASSKEY,
   INITIAL_ADMIN_TEAM,
   saveAdminSession,
-  clearAdminSession
+  clearAdminSession,
+  subscribeCloudSyncStatus,
+  getFirestoreUpgradeUrl,
+  retrySyncPendingPlaces,
+  getPendingSyncCount,
+  CloudSyncStatus
 } from '../lib/firebase';
 import {
   X,
@@ -115,8 +120,19 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('syncing');
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(getPendingSyncCount());
 
   const isCurrentlyAdmin = Boolean(adminProfile || adminUser);
+
+  useEffect(() => {
+    const unsub = subscribeCloudSyncStatus(setCloudStatus);
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    setPendingSyncCount(getPendingSyncCount());
+  }, [places, isOpen]);
 
   // Load analytics whenever analytics tab is active
   useEffect(() => {
@@ -622,7 +638,33 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
           </div>
 
           {isCurrentlyAdmin && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {pendingSyncCount > 0 && (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const res = await retrySyncPendingPlaces();
+                      setPendingSyncCount(getPendingSyncCount());
+                      await onRefreshData();
+                      setStatusMessage({
+                        text: res.synced > 0
+                          ? `ซิงค์ข้อมูลขึ้น Firestore สำเร็จ ${res.synced} รายการ`
+                          : 'ระบบคลาวด์ยังไม่พร้อมซิงค์ (ข้อมูลยังคงปลอดภัยในเครื่องนี้)',
+                        isError: res.synced === 0
+                      });
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>ซิงค์ขึ้นคลาวด์ ({pendingSyncCount})</span>
+                </button>
+              )}
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1 px-3 py-1.5 bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 rounded-md text-xs font-medium transition-colors cursor-pointer"
@@ -633,6 +675,26 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
             </div>
           )}
         </div>
+
+        {/* Cloud Quota Warning Banner inside Admin Dashboard */}
+        {isCurrentlyAdmin && cloudStatus === 'quota_exceeded' && (
+          <div className="px-6 py-2.5 text-xs bg-amber-50 border-b border-amber-200 text-amber-950 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" />
+              <span>
+                <strong>โควต้าอ่านฟรีรายวันของ Cloud Firestore เต็ม:</strong> กำลังดึงข้อมูลจาก IndexedDB ในเครื่องนี้ (ข้อมูลที่เพิ่มจากอุปกรณ์อื่นจะโหลดมาแสดงเมื่อโควต้ารีเซ็ตหรืออัปเกรดฐานข้อมูล)
+              </span>
+            </div>
+            <a
+              href={getFirestoreUpgradeUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-medium shrink-0"
+            >
+              เปิดหน้าอัปเกรด Firestore &rarr;
+            </a>
+          </div>
+        )}
 
         {/* Status Toast */}
         {statusMessage && (
