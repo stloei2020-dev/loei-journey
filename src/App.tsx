@@ -89,7 +89,7 @@ export default function App() {
   const [sharedRetryNonce, setSharedRetryNonce] = useState(0);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(true);
-  const [showAllRecent, setShowAllRecent] = useState<boolean>(true);
+  const [showAllRecent, setShowAllRecent] = useState<boolean>(false);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('syncing');
 
   const handleOpenPlace = (place: Place) => {
@@ -208,13 +208,40 @@ export default function App() {
     };
   }, [pendingSharedPlaceId, places, sharedRetryNonce]);
 
-  // Keep document title synchronized when viewing a specific shared place
+  // Keep document title & social OpenGraph metadata synchronized when viewing a specific place
   useEffect(() => {
     if (typeof document === 'undefined') return;
+    const defaultTitle = 'LOEI JOURNEY | เลย เจอร์นีย์ - นิตยสารท่องเที่ยวจังหวัดเลย';
+    const defaultDesc =
+      'LOEI JOURNEY นิตยสารท่องเที่ยวจังหวัดเลย แนะนำที่พัก คาเฟ่ ร้านอาหาร สถานที่ท่องเที่ยว และธุรกิจบริการ โดยสำนักงานพาณิชย์จังหวัดเลย';
+
+    const setMeta = (selector: string, content: string) => {
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute('content', content);
+    };
+
     if (selectedPlace) {
-      document.title = `${selectedPlace.name} (${selectedPlace.district}) | LOEI JOURNEY`;
+      const placeTitle = `${selectedPlace.name} (${selectedPlace.district}) | LOEI JOURNEY`;
+      const placeDesc = (selectedPlace.shortDescription || selectedPlace.description || defaultDesc).slice(0, 160);
+      const ogImg = `${window.location.origin}/api/place-image?id=${encodeURIComponent(selectedPlace.id)}&cat=${encodeURIComponent(selectedPlace.category)}`;
+      document.title = placeTitle;
+      setMeta('meta[name="description"]', placeDesc);
+      setMeta('meta[property="og:title"]', placeTitle);
+      setMeta('meta[property="og:description"]', placeDesc);
+      setMeta('meta[property="og:image"]', ogImg);
+      setMeta('meta[name="twitter:title"]', placeTitle);
+      setMeta('meta[name="twitter:description"]', placeDesc);
+      setMeta('meta[name="twitter:image"]', ogImg);
     } else {
-      document.title = 'LOEI JOURNEY | เลย เจอร์นีย์ - นิตยสารท่องเที่ยวจังหวัดเลย';
+      const defaultImg = `${window.location.origin}/images/loei_hero_sea_of_mist_1794278412692.jpg`;
+      document.title = defaultTitle;
+      setMeta('meta[name="description"]', defaultDesc);
+      setMeta('meta[property="og:title"]', defaultTitle);
+      setMeta('meta[property="og:description"]', defaultDesc);
+      setMeta('meta[property="og:image"]', defaultImg);
+      setMeta('meta[name="twitter:title"]', defaultTitle);
+      setMeta('meta[name="twitter:description"]', defaultDesc);
+      setMeta('meta[name="twitter:image"]', defaultImg);
     }
   }, [selectedPlace]);
 
