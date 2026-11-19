@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Place } from '../types';
 import { Star, ArrowUpRight, Compass, ChevronLeft, ChevronRight, Share2, Check } from 'lucide-react';
-import { buildPlaceShareUrl } from '../constants/contact';
+import { buildPlaceShareUrl, warmShareCache } from '../constants/contact';
 import { trackEvent } from '../lib/firebase';
 
 interface PlaceCardProps {
@@ -16,6 +16,7 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
 
   const handleCopyPlaceLink = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    warmShareCache(place);
     const url = buildPlaceShareUrl(place);
     try {
       await navigator.clipboard.writeText(url);

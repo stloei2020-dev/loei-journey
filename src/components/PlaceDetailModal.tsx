@@ -22,7 +22,7 @@ import {
 import confetti from 'canvas-confetti';
 import { ImageLightbox } from './ImageLightbox';
 import { trackEvent } from '../lib/firebase';
-import { OFFICIAL_CONTACT, buildPlaceShareUrl } from '../constants/contact';
+import { OFFICIAL_CONTACT, buildPlaceShareUrl, warmShareCache } from '../constants/contact';
 
 interface PlaceDetailModalProps {
   place: Place | null;
@@ -47,6 +47,8 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
       setCurrentImageIndex(0);
       setCopiedLink(false);
       setShowShareMenu(false);
+      // Warm server OpenGraph cache with this exact place's real photo & shop name
+      warmShareCache(place);
       // Track view_place event in analytics
       trackEvent('view_place', place.id, place.name, 'web');
     }
@@ -67,14 +69,15 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
   };
 
   const placeShareUrl = buildPlaceShareUrl(place);
-  const shareText = `แนะนำที่เที่ยวจังหวัดเลย: ${place.name} (${place.district}) - LOEI JOURNEY`;
+  const shareText = `${place.name} (${place.district}) — ${place.shortDescription || 'LOEI JOURNEY'}`;
 
-  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(placeShareUrl)}`;
+  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(placeShareUrl)}&quote=${encodeURIComponent(shareText)}`;
   const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(placeShareUrl)}&text=${encodeURIComponent(shareText)}`;
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(placeShareUrl)}`;
 
   const handleCopyLink = async () => {
     try {
+      warmShareCache(place);
       await navigator.clipboard.writeText(placeShareUrl);
       setCopiedLink(true);
       trackEvent('share', place.id, place.name, 'copy');
@@ -147,13 +150,23 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
                 </button>
 
                 {showShareMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-stone-200 rounded-xl shadow-xl p-2.5 z-20 animate-in fade-in zoom-in-95 space-y-1">
-                    <div className="px-2 py-1">
-                      <div className="text-[11px] font-semibold text-[#153326]">
-                        แชร์เฉพาะสถานที่นี้
-                      </div>
-                      <div className="text-[10px] text-stone-400 truncate mt-0.5 font-mono" title={placeShareUrl}>
-                        {placeShareUrl}
+                  <div className="absolute right-0 mt-2 w-72 bg-white border border-stone-200 rounded-xl shadow-xl p-2.5 z-20 animate-in fade-in zoom-in-95 space-y-2">
+                    <div className="flex items-center gap-2.5 p-2 rounded-lg bg-[#FAF8F5] border border-stone-200/80">
+                      <img
+                        src={allImages[0] || place.imageUrl}
+                        alt={place.name}
+                        className="w-12 h-12 rounded-md object-cover shrink-0 border border-stone-200 bg-stone-100"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-stone-900 truncate" title={place.name}>
+                          {place.name}
+                        </div>
+                        <div className="text-[11px] text-emerald-800 truncate">
+                          {place.district}
+                        </div>
+                        <div className="text-[10px] text-stone-400 truncate font-mono" title={placeShareUrl}>
+                          แชร์เฉพาะสถานที่นี้
+                        </div>
                       </div>
                     </div>
                     <div className="border-t border-stone-100 pt-1">

@@ -118,8 +118,30 @@ export function buildPlaceShareUrl(placeOrId: Place | string): string {
   if (encoded && encoded.length <= 1500) {
     url.searchParams.set('d', encoded);
   }
+  url.searchParams.set('v', String(Date.now()).slice(-6));
 
   return url.toString();
+}
+
+export async function warmShareCache(place: Place): Promise<void> {
+  if (typeof window === 'undefined' || !place?.id || !place?.name) return;
+  try {
+    await fetch('/api/share-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: place.id,
+        name: place.name,
+        district: place.district,
+        category: place.category,
+        shortDescription: (place.shortDescription || place.description || '').slice(0, 180),
+        imageUrl: place.imageUrl || (place.gallery && place.gallery[0]) || '',
+        updatedAt: place.updatedAt || new Date().toISOString()
+      })
+    });
+  } catch {
+    // Non-blocking warm-up
+  }
 }
 
 export function decodePlaceShareFallback(search: string, fallbackId?: string): Place | null {

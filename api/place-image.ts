@@ -1,4 +1,4 @@
-import firebaseConfig from '../firebase-applet-config.json';
+import { fetchPlaceFromFirestore, getCachedSharePlace } from './_cache';
 
 interface ApiRequest {
   query?: Record<string, string | string[] | undefined>;
@@ -31,19 +31,10 @@ function getQueryString(val: string | string[] | undefined): string {
   return Array.isArray(val) ? val[0] : val;
 }
 
-function decodeBase64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
 function redirectResponse(res: ApiResponse, targetUrl: string) {
   res.statusCode = 302;
   res.setHeader('Location', targetUrl);
-  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600');
   res.end();
 }
 
@@ -59,23 +50,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   let imageUrl = '';
 
   if (id) {
-    try {
-      const apiUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/places/${encodeURIComponent(id)}?key=${firebaseConfig.apiKey}`;
-      const resp = await fetch(apiUrl);
-      if (resp.ok) {
-        const docData = await resp.json() as {
-          fields?: {
-            imageUrl?: { stringValue?: string };
-            gallery?: { arrayValue?: { values?: Array<{ stringValue?: string }> } };
-          };
-        };
-        imageUrl =
-          docData.fields?.imageUrl?.stringValue ||
-          docData.fields?.gallery?.arrayValue?.values?.[0]?.stringValue ||
-          '';
+    // 1. Check local share cache first (works even if Firestore quota is exceeded)
+    const cached = getCachedSharePlace(id);
+    if (cached?.imageUrl) {
+      imageUrl = cached.imageUrl;
+    }
+
+    // 2. Otherwise read canonical place document from Firestore
+    if (!imageUrl) {
+      const fromFirestore = await fetchPlaceFromFirestore(id);
+      if (fromFirestore?.imageUrl) {
+        imageUrl = fromFirestore.imageUrl;
       }
-    } catch {
-      // Fallback to category image below
     }
   }
 
@@ -89,12 +75,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (match) {
       const mimeType = match[1];
       const base64Data = match[2];
-      const bytes = decodeBase64ToBytes(base64Data);
-      const NodeBuffer = (globalThis as { Buffer?: { from: (arr: Uint8Array) => unknown } }).Buffer;
+      const bytes = Buffer.from(base64Data, 'base64');
       res.statusCode = 200;
       res.setHeader('Content-Type', mimeType);
-      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-      res.end(NodeBuffer ? NodeBuffer.from(bytes) : bytes);
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
+      res.end(bytes);
       return;
     }
   }
