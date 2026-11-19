@@ -11,6 +11,7 @@ import {
   getFirestore,
   collection,
   getDocs,
+  getDoc,
   doc,
   setDoc,
   updateDoc,
@@ -591,6 +592,38 @@ export async function getPlaces(): Promise<Place[]> {
   saveSingleKeyLocalStorageCache(result);
 
   return result;
+}
+
+export async function getPlaceById(id: string): Promise<Place | null> {
+  if (!id) return null;
+  const deletedIds = getDeletedPlaceIds();
+  if (deletedIds.has(id)) return null;
+
+  // 1. Try full local IndexedDB + localStorage first (0 Firestore reads)
+  const localPlaces = await getLocalPlacesAsync();
+  const localMatch = localPlaces.find((p) => p.id === id);
+  if (localMatch) return localMatch;
+
+  // 2. Fallback to single-document Firestore read (only 1 read unit)
+  try {
+    const snap = await getDoc(doc(db, 'places', id));
+    if (snap.exists()) {
+      setCloudSyncStatus('connected');
+      const place: Place = { id: snap.id, ...(snap.data() as Omit<Place, 'id'>) };
+      idbPutPlace(place).catch(() => {});
+      return place;
+    }
+  } catch (error) {
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.GET, `places/${id}`);
+    }
+    if (isQuotaError(error)) {
+      setCloudSyncStatus('quota_exceeded');
+    }
+    console.warn('Could not fetch single place from Firestore:', error);
+  }
+
+  return null;
 }
 
 export async function savePlace(place: Place): Promise<Place> {

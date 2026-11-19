@@ -1,5 +1,6 @@
 import React from 'react';
-import { Compass, Phone, Mail, MapPin, ExternalLink, Heart } from 'lucide-react';
+import { Compass, Phone, MapPin, ExternalLink } from 'lucide-react';
+import { OFFICIAL_CONTACT } from '../constants/contact';
 
 interface FooterProps {
   onSelectDistrict: (district: string) => void;
@@ -92,27 +93,38 @@ export const Footer: React.FC<FooterProps> = ({ onSelectDistrict, onOpenAdmin })
             </ul>
           </div>
 
-          {/* Tourism Official Hotlines & Support (3 cols) */}
+          {/* Official Contact Details (3 cols) */}
           <div className="lg:col-span-3 space-y-3">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-white">
               ข้อมูลติดต่อสำคัญ
             </h4>
             <div className="space-y-2.5 text-xs text-stone-400">
               <div className="flex items-start gap-2">
+                <Compass className="w-3.5 h-3.5 text-amber-200/80 mt-0.5 shrink-0" />
+                <span className="font-medium text-stone-200">{OFFICIAL_CONTACT.organization}</span>
+              </div>
+              <div className="flex items-start gap-2">
                 <MapPin className="w-3.5 h-3.5 text-amber-200/80 mt-0.5 shrink-0" />
-                <span>การท่องเที่ยวแห่งประเทศไทย (ททท.) สำนักงานเลย</span>
+                <span className="leading-relaxed">{OFFICIAL_CONTACT.address}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-amber-200/80 shrink-0" />
-                <span>โทร: 042-812-812, 042-811-405</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-amber-200/80 shrink-0" />
-                <span>สายด่วนท่องเที่ยว: 1672 (TAT Contact Center)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-amber-200/80 shrink-0" />
-                <span>ตำรวจท่องเที่ยว: 1155</span>
+              <div className="flex items-start gap-2">
+                <Phone className="w-3.5 h-3.5 text-amber-200/80 mt-0.5 shrink-0" />
+                <div className="leading-relaxed">
+                  <span>เบอร์โทรศัพท์: </span>
+                  <a
+                    href={`tel:${OFFICIAL_CONTACT.phones[0].tel}`}
+                    className="text-stone-200 hover:text-amber-200 transition-colors"
+                  >
+                    {OFFICIAL_CONTACT.phones[0].display}
+                  </a>
+                  <span>, </span>
+                  <a
+                    href={`tel:${OFFICIAL_CONTACT.phones[1].tel}`}
+                    className="text-stone-200 hover:text-amber-200 transition-colors"
+                  >
+                    {OFFICIAL_CONTACT.phones[1].display}
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -130,12 +142,13 @@ export const Footer: React.FC<FooterProps> = ({ onSelectDistrict, onOpenAdmin })
                 ระบบหลังบ้าน (Admin CMS)
               </button>
               <a
-                href="https://thai.tourismthailand.org"
+                href={OFFICIAL_CONTACT.websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block text-stone-400 hover:text-amber-200 transition-colors"
+                className="inline-flex items-center gap-1 text-stone-400 hover:text-amber-200 transition-colors"
               >
-                เว็บไซต์ ททท. ประเทศไทย
+                <span>{OFFICIAL_CONTACT.websiteLabel}</span>
+                <ExternalLink className="w-3 h-3 shrink-0" />
               </a>
               <span className="block text-stone-600">
                 Connected to Firestore DB
@@ -148,7 +161,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectDistrict, onOpenAdmin })
         {/* Bottom Bar: Copyright */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500 font-light">
           <div>
-            © {new Date().getFullYear()} LOEI JOURNEY. All rights reserved. นิตยสารการท่องเที่ยวจังหวัดเลย
+            © {new Date().getFullYear()} LOEI JOURNEY. All rights reserved. · {OFFICIAL_CONTACT.organization}
           </div>
           <div className="flex items-center gap-1 text-stone-400">
             <span>สร้างด้วยความรักในธรรมชาติและมนต์เสน่ห์เมืองเลย</span>

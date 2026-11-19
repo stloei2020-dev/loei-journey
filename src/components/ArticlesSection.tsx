@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Article } from '../types';
 import { BookOpen, Clock, User, ArrowUpRight, Calendar } from 'lucide-react';
 import { ArticleDetailModal } from './ArticleDetailModal';
@@ -9,6 +9,38 @@ interface ArticlesSectionProps {
 
 export const ArticlesSection: React.FC<ArticlesSectionProps> = ({ articles }) => {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || articles.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get('article');
+    if (articleId) {
+      const match = articles.find((a) => a.id === articleId);
+      if (match) {
+        setSelectedArticle(match);
+      }
+    }
+  }, [articles]);
+
+  const handleOpenArticle = (article: Article) => {
+    setSelectedArticle(article);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.searchParams.set('article', article.id);
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+  };
+
+  const handleCloseArticle = () => {
+    setSelectedArticle(null);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('article')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  };
 
   if (!articles || articles.length === 0) return null;
 
@@ -41,7 +73,7 @@ export const ArticlesSection: React.FC<ArticlesSectionProps> = ({ articles }) =>
           {/* Lead Story (7 cols) */}
           {leadArticle && (
             <div
-              onClick={() => setSelectedArticle(leadArticle)}
+              onClick={() => handleOpenArticle(leadArticle)}
               className="lg:col-span-7 group cursor-pointer bg-[#FAF8F5] rounded-2xl overflow-hidden border border-stone-200 hover:border-stone-300 transition-all duration-300 hover:shadow-lg flex flex-col"
             >
               <div className="relative aspect-[16/10] overflow-hidden bg-stone-100">
@@ -91,7 +123,7 @@ export const ArticlesSection: React.FC<ArticlesSectionProps> = ({ articles }) =>
             {secondaryArticles.map((article) => (
               <div
                 key={article.id}
-                onClick={() => setSelectedArticle(article)}
+                onClick={() => handleOpenArticle(article)}
                 className="group cursor-pointer p-5 bg-[#FAF8F5] rounded-xl border border-stone-200 hover:border-stone-300 transition-all hover:shadow-sm flex flex-col sm:flex-row gap-4"
               >
                 <div className="relative w-full sm:w-36 aspect-[4/3] sm:aspect-square rounded-lg overflow-hidden bg-stone-100 shrink-0">
@@ -135,7 +167,7 @@ export const ArticlesSection: React.FC<ArticlesSectionProps> = ({ articles }) =>
       {/* Reader Modal */}
       <ArticleDetailModal
         article={selectedArticle}
-        onClose={() => setSelectedArticle(null)}
+        onClose={handleCloseArticle}
       />
     </section>
   );

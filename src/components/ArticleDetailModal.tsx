@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Article } from '../types';
-import { X, Clock, Calendar, Share2, Check } from 'lucide-react';
+import { X, Clock, Calendar, Share2, Check, ExternalLink } from 'lucide-react';
+import { OFFICIAL_CONTACT, buildArticleShareUrl } from '../constants/contact';
 
 interface ArticleDetailModalProps {
   article: Article | null;
@@ -13,24 +14,17 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
 
   if (!article) return null;
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const articleShareUrl = buildArticleShareUrl(article.id);
+  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(articleShareUrl)}`;
+  const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(articleShareUrl)}&text=${encodeURIComponent(article.title)}`;
+  const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(articleShareUrl)}`;
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(currentUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleShareFacebook = () => {
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`, '_blank');
-  };
-
-  const handleShareLine = () => {
-    window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(currentUrl)}`, '_blank');
-  };
-
-  const handleShareTwitter = () => {
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title)}&url=${encodeURIComponent(currentUrl)}`, '_blank');
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(articleShareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
   // Render paragraphs with markdown subheadings support
@@ -94,30 +88,43 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
               </button>
 
               {showShare && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl shadow-xl p-2 z-20">
-                  <button
-                    onClick={handleShareFacebook}
-                    className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md"
-                  >
-                    Facebook
-                  </button>
-                  <button
-                    onClick={handleShareLine}
-                    className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md"
-                  >
-                    LINE
-                  </button>
-                  <button
-                    onClick={handleShareTwitter}
-                    className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md"
-                  >
-                    X (Twitter)
-                  </button>
-                  <button
-                    onClick={handleCopyLink}
+                <div className="absolute right-0 mt-2 w-56 bg-white border border-stone-200 rounded-xl shadow-xl p-2 z-20 space-y-0.5">
+                  <div className="text-[11px] font-semibold text-[#153326] px-2.5 py-1">
+                    แชร์เฉพาะบทความนี้
+                  </div>
+                  <a
+                    href={facebookShareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md flex items-center justify-between"
                   >
-                    <span>คัดลอกลิงก์</span>
+                    <span>Facebook</span>
+                    <ExternalLink className="w-3 h-3 text-stone-400" />
+                  </a>
+                  <a
+                    href={lineShareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md flex items-center justify-between"
+                  >
+                    <span>LINE</span>
+                    <ExternalLink className="w-3 h-3 text-stone-400" />
+                  </a>
+                  <a
+                    href={twitterShareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md flex items-center justify-between"
+                  >
+                    <span>X (Twitter)</span>
+                    <ExternalLink className="w-3 h-3 text-stone-400" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="w-full text-left px-2.5 py-1.5 text-xs font-medium text-[#153326] hover:bg-emerald-50 rounded-md flex items-center justify-between"
+                  >
+                    <span>{copied ? 'คัดลอกลิงก์แล้ว' : 'คัดลอกลิงก์เฉพาะบทความ'}</span>
                     {copied && <Check className="w-3.5 h-3.5 text-emerald-600" />}
                   </button>
                 </div>
@@ -172,8 +179,13 @@ export const ArticleDetailModal: React.FC<ArticleDetailModalProps> = ({ article,
             </div>
 
             {/* Editorial Footer Sign-off */}
-            <div className="mt-12 pt-6 border-t border-stone-300 text-center text-xs text-stone-500 font-serif italic">
-              — LOEI JOURNEY MAGAZINE · บันทึกการเดินทางจังหวัดเลย —
+            <div className="mt-12 pt-6 border-t border-stone-300 text-center space-y-1.5">
+              <div className="text-xs text-stone-600 font-serif italic">
+                — LOEI JOURNEY MAGAZINE · {OFFICIAL_CONTACT.organization} —
+              </div>
+              <div className="text-[11px] text-stone-500">
+                {OFFICIAL_CONTACT.address} · เบอร์โทรศัพท์ {OFFICIAL_CONTACT.phoneDisplay}
+              </div>
             </div>
 
           </div>

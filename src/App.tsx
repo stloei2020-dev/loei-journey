@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Place, Article, PlaceCategory, PriceFilter, AdminProfile } from './types';
 import {
   getPlaces,
+  getPlaceById,
   subscribePlaces,
   getCachedPlaces,
   restoreSamplePlaces,
@@ -76,10 +77,45 @@ export default function App() {
 
   // Modals & Preview States
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [pendingSharedPlaceId, setPendingSharedPlaceId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('place');
+  });
+  const [isDedicatedSharedView, setIsDedicatedSharedView] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).has('place');
+  });
+  const [sharedPlaceNotFound, setSharedPlaceNotFound] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(true);
   const [showAllRecent, setShowAllRecent] = useState<boolean>(true);
   const [cloudStatus, setCloudStatus] = useState<CloudSyncStatus>('syncing');
+
+  const handleOpenPlace = (place: Place) => {
+    setSelectedPlace(place);
+    setPendingSharedPlaceId(null);
+    setIsDedicatedSharedView(false);
+    setSharedPlaceNotFound(false);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.searchParams.set('place', place.id);
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+  };
+
+  const handleClosePlace = () => {
+    setSelectedPlace(null);
+    setPendingSharedPlaceId(null);
+    setIsDedicatedSharedView(false);
+    setSharedPlaceNotFound(false);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('place')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  };
 
   // Refresh data on demand (e.g. after Admin save/delete)
   const loadData = async () => {
@@ -125,6 +161,46 @@ export default function App() {
       unsubscribeAuth();
     };
   }, []);
+
+  // Resolve deep-linked single place (?place=<id>)
+  useEffect(() => {
+    if (!pendingSharedPlaceId) return;
+
+    const fromState = places.find((p) => p.id === pendingSharedPlaceId);
+    if (fromState) {
+      setSelectedPlace(fromState);
+      setPendingSharedPlaceId(null);
+      setSharedPlaceNotFound(false);
+      return;
+    }
+
+    let cancelled = false;
+    getPlaceById(pendingSharedPlaceId).then((fetched) => {
+      if (cancelled) return;
+      if (fetched) {
+        setSelectedPlace(fetched);
+        setPendingSharedPlaceId(null);
+        setSharedPlaceNotFound(false);
+      } else if (cloudStatus === 'connected' || cloudStatus === 'quota_exceeded' || cloudStatus === 'offline') {
+        setSharedPlaceNotFound(true);
+        setPendingSharedPlaceId(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingSharedPlaceId, places, cloudStatus]);
+
+  // Keep document title synchronized when viewing a specific shared place
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (selectedPlace) {
+      document.title = `${selectedPlace.name} (${selectedPlace.district}) | LOEI JOURNEY`;
+    } else {
+      document.title = 'LOEI JOURNEY | เลย เจอร์นีย์ - นิตยสารท่องเที่ยวจังหวัดเลย';
+    }
+  }, [selectedPlace]);
 
   // Sync tab navigation with filters
   const handleSelectTab = (tab: string) => {
@@ -388,7 +464,7 @@ export default function App() {
         {currentTab === 'home' && !isFiltered && featuredPlace && (
           <FeaturedWeeklySection
             place={featuredPlace}
-            onSelect={(place) => setSelectedPlace(place)}
+            onSelect={handleOpenPlace}
           />
         )}
 
@@ -428,7 +504,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -535,7 +611,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -570,7 +646,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -605,7 +681,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -640,7 +716,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -675,7 +751,7 @@ export default function App() {
                     <PlaceCard
                       key={place.id}
                       place={place}
-                      onSelect={(p) => setSelectedPlace(p)}
+                      onSelect={handleOpenPlace}
                     />
                   ))}
                 </div>
@@ -704,8 +780,37 @@ export default function App() {
       {/* Modals */}
       <PlaceDetailModal
         place={selectedPlace}
-        onClose={() => setSelectedPlace(null)}
+        onClose={handleClosePlace}
+        isDedicatedSharedView={isDedicatedSharedView}
       />
+
+      {/* Resolving / Not Found Feedback for Shared Single-Place Links */}
+      {pendingSharedPlaceId && !selectedPlace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0C1C14] p-4">
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center max-w-sm w-full shadow-xl space-y-3">
+            <div className="w-8 h-8 border-2 border-[#153326] border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="text-sm font-medium text-stone-800">กำลังโหลดข้อมูลสถานที่ที่แชร์...</div>
+          </div>
+        </div>
+      )}
+
+      {sharedPlaceNotFound && !selectedPlace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center max-w-sm w-full shadow-xl space-y-4">
+            <div className="text-base font-bold text-stone-900">ไม่พบข้อมูลสถานที่ที่ระบุ</div>
+            <p className="text-xs text-stone-500">
+              ลิงก์สถานที่นี้อาจถูกลบออกหรือยังไม่ได้ซิงค์ข้อมูลจากระบบคลาวด์
+            </p>
+            <button
+              type="button"
+              onClick={handleClosePlace}
+              className="px-4 py-2 bg-[#153326] text-white text-xs font-medium rounded-lg hover:bg-emerald-900 transition-colors"
+            >
+              ดูสถานที่ทั้งหมดในจังหวัดเลย
+            </button>
+          </div>
+        </div>
+      )}
 
       <AdminDashboardModal
         isOpen={isAdminOpen}

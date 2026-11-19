@@ -1377,7 +1377,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             value={editingPlace.phone || ''}
                             onChange={(e) => setEditingPlace({ ...editingPlace, phone: e.target.value })}
                             className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                            placeholder="เช่น 042-821-254"
+                            placeholder="เช่น 042 811 163"
                           />
                         </div>
                         <div>
@@ -1415,7 +1415,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           value={editingPlace.address || ''}
                           onChange={(e) => setEditingPlace({ ...editingPlace, address: e.target.value })}
                           className="w-full border border-stone-300 rounded-lg p-2.5 focus:border-[#153326] focus:outline-none"
-                          placeholder="ตำบล อำเภอ จังหวัดเลย"
+                          placeholder="เช่น 302/9 ถนนเลย-เชียงคาน ตำบลกุดป่อง อำเภอเมืองเลย จังหวัดเลย"
                         />
                       </div>
 

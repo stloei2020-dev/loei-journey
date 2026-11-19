@@ -189,7 +189,7 @@ export const SAMPLE_PLACES: Place[] = [
     openingHours: 'ทุกวัน 16:30 - 21:30 น.',
     googleMapsUrl: 'https://maps.google.com/?q=Chiang+Khan+Walking+Street',
     facebookUrl: 'https://facebook.com/chiangkhanwalkingstreet',
-    lineUrl: 'https://line.me/R/ti/p/@tatloei',
+    lineUrl: 'https://line.me/R/ti/p/@chiangkhan',
     rating: 4.8,
     isFeatured: true,
     viewsCount: 1280,

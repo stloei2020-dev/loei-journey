@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Place } from '../types';
-import { Star, MapPin, ArrowUpRight, Compass, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, ArrowUpRight, Compass, ChevronLeft, ChevronRight, Share2, Check } from 'lucide-react';
+import { buildPlaceShareUrl } from '../constants/contact';
+import { trackEvent } from '../lib/firebase';
 
 interface PlaceCardProps {
   place: Place;
@@ -10,6 +12,18 @@ interface PlaceCardProps {
 export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
   const [imageError, setImageError] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [copiedPlaceLink, setCopiedPlaceLink] = useState(false);
+
+  const handleCopyPlaceLink = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = buildPlaceShareUrl(place.id);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedPlaceLink(true);
+      trackEvent('share', place.id, place.name, 'copy');
+      setTimeout(() => setCopiedPlaceLink(false), 2000);
+    } catch {}
+  };
 
   // Combine gallery and main image for preview slider
   const rawImages = [
@@ -184,10 +198,35 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
             ))}
           </div>
 
-          <span className="text-xs font-medium text-[#153326] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 shrink-0">
-            <span>ดูข้อมูล</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyPlaceLink}
+              title="คัดลอกลิงก์เฉพาะสถานที่นี้"
+              className={`px-2 py-1 rounded-md border text-[11px] font-medium transition-colors flex items-center gap-1 ${
+                copiedPlaceLink
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100 hover:text-[#153326]'
+              }`}
+            >
+              {copiedPlaceLink ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  <span>คัดลอกแล้ว</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3 h-3" />
+                  <span>แชร์</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-xs font-medium text-[#153326] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+              <span>ดูข้อมูล</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
+          </div>
         </div>
       </div>
     </article>

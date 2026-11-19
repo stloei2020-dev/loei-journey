@@ -22,13 +22,15 @@ import {
 import confetti from 'canvas-confetti';
 import { ImageLightbox } from './ImageLightbox';
 import { trackEvent } from '../lib/firebase';
+import { OFFICIAL_CONTACT, buildPlaceShareUrl } from '../constants/contact';
 
 interface PlaceDetailModalProps {
   place: Place | null;
   onClose: () => void;
+  isDedicatedSharedView?: boolean;
 }
 
-export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClose }) => {
+export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClose, isDedicatedSharedView = false }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -64,37 +66,45 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
     }
   };
 
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const placeShareUrl = buildPlaceShareUrl(place.id);
   const shareText = `แนะนำที่เที่ยวจังหวัดเลย: ${place.name} (${place.district}) - LOEI JOURNEY`;
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(currentUrl);
-    setCopiedLink(true);
-    trackEvent('share', place.id, place.name, 'copy');
-    setTimeout(() => setCopiedLink(false), 2500);
+  const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(placeShareUrl)}`;
+  const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(placeShareUrl)}&text=${encodeURIComponent(shareText)}`;
+  const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(placeShareUrl)}`;
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(placeShareUrl);
+      setCopiedLink(true);
+      trackEvent('share', place.id, place.name, 'copy');
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
   };
 
-  const handleShareLine = () => {
-    trackEvent('share', place.id, place.name, 'line');
-    window.open(`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(currentUrl)}`, '_blank');
-  };
-
-  const handleShareFacebook = () => {
-    trackEvent('share', place.id, place.name, 'facebook');
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}`, '_blank');
-  };
-
-  const handleShareTwitter = () => {
-    trackEvent('share', place.id, place.name, 'x');
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(currentUrl)}`, '_blank');
+  const handleNativeShare = async () => {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: `${place.name} - LOEI JOURNEY`,
+          text: shareText,
+          url: placeShareUrl
+        });
+        trackEvent('share', place.id, place.name, 'copy');
+      } catch {}
+    }
   };
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 ${
+        isDedicatedSharedView ? 'bg-[#0C1C14]' : 'bg-stone-950/70 backdrop-blur-xs'
+      }`}>
         
         {/* Backdrop click */}
-        <div className="absolute inset-0" onClick={onClose} />
+        <div className="absolute inset-0" onClick={isDedicatedSharedView ? undefined : onClose} />
 
         <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] z-10 border border-stone-200">
           
@@ -129,42 +139,73 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
               <div className="relative">
                 <button
                   onClick={() => setShowShareMenu(!showShareMenu)}
-                  className="p-2 rounded-full bg-white border border-stone-200 text-stone-600 hover:text-stone-900 transition-colors"
-                  title="แชร์ข้อมูล"
+                  className="px-3 py-1.5 rounded-full bg-white border border-stone-200 text-stone-700 hover:text-[#153326] hover:border-[#153326]/40 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                  title="แชร์เฉพาะสถานที่นี้"
                 >
-                  <Share2 className="w-4 h-4" />
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">แชร์สถานที่นี้</span>
                 </button>
 
                 {showShareMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl shadow-xl p-2 z-20 animate-in fade-in zoom-in-95">
-                    <div className="text-[11px] font-medium text-stone-400 px-2 py-1 uppercase tracking-wider">
-                      แชร์ข้อมูลสถานที่
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-stone-200 rounded-xl shadow-xl p-2.5 z-20 animate-in fade-in zoom-in-95 space-y-1">
+                    <div className="px-2 py-1">
+                      <div className="text-[11px] font-semibold text-[#153326]">
+                        แชร์เฉพาะสถานที่นี้
+                      </div>
+                      <div className="text-[10px] text-stone-400 truncate mt-0.5 font-mono" title={placeShareUrl}>
+                        {placeShareUrl}
+                      </div>
                     </div>
-                    <button
-                      onClick={handleShareFacebook}
-                      className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
-                    >
-                      <span>Facebook</span>
-                    </button>
-                    <button
-                      onClick={handleShareLine}
-                      className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
-                    >
-                      <span>LINE</span>
-                    </button>
-                    <button
-                      onClick={handleShareTwitter}
-                      className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
-                    >
-                      <span>X (Twitter)</span>
-                    </button>
-                    <button
-                      onClick={handleCopyLink}
-                      className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
-                    >
-                      <span>คัดลอกลิงก์</span>
-                      {copiedLink && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                    </button>
+                    <div className="border-t border-stone-100 pt-1">
+                      <a
+                        href={facebookShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => trackEvent('share', place.id, place.name, 'facebook')}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
+                      >
+                        <span>แชร์ไปยัง Facebook</span>
+                        <ExternalLink className="w-3 h-3 text-stone-400" />
+                      </a>
+                      <a
+                        href={lineShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => trackEvent('share', place.id, place.name, 'line')}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
+                      >
+                        <span>แชร์ไปยัง LINE</span>
+                        <ExternalLink className="w-3 h-3 text-stone-400" />
+                      </a>
+                      <a
+                        href={twitterShareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => trackEvent('share', place.id, place.name, 'x')}
+                        className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
+                      >
+                        <span>แชร์ไปยัง X (Twitter)</span>
+                        <ExternalLink className="w-3 h-3 text-stone-400" />
+                      </a>
+                      {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                        <button
+                          type="button"
+                          onClick={handleNativeShare}
+                          className="w-full text-left px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-50 rounded-md transition-colors flex items-center justify-between"
+                        >
+                          <span>แชร์ผ่านแอปอื่นบนเครื่อง</span>
+                          <Share2 className="w-3 h-3 text-stone-400" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="w-full text-left px-2.5 py-1.5 text-xs font-medium text-[#153326] hover:bg-emerald-50 rounded-md transition-colors flex items-center justify-between"
+                      >
+                        <span>{copiedLink ? 'คัดลอกลิงก์สถานที่นี้แล้ว' : 'คัดลอกลิงก์เฉพาะสถานที่นี้'}</span>
+                        {copiedLink && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -418,6 +459,23 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
                   <ExternalLink className="w-3 h-3 opacity-70" />
                 </a>
               )}
+              {/* Official Coordinator Contact Strip */}
+              <div className="w-full mt-2 bg-stone-50 border border-stone-200/80 rounded-xl p-3.5 text-xs text-stone-600 space-y-1">
+                <div className="font-semibold text-stone-800">
+                  ข้อมูลติดต่อหน่วยงานดูแลข้อมูล: {OFFICIAL_CONTACT.organization}
+                </div>
+                <div>{OFFICIAL_CONTACT.address}</div>
+                <div>
+                  เบอร์โทรศัพท์:{' '}
+                  <a href={`tel:${OFFICIAL_CONTACT.phones[0].tel}`} className="text-[#153326] font-medium hover:underline">
+                    {OFFICIAL_CONTACT.phones[0].display}
+                  </a>
+                  {', '}
+                  <a href={`tel:${OFFICIAL_CONTACT.phones[1].tel}`} className="text-[#153326] font-medium hover:underline">
+                    {OFFICIAL_CONTACT.phones[1].display}
+                  </a>
+                </div>
+              </div>
             </div>
 
             {/* Action CTAs */}
@@ -445,7 +503,7 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
                 onClick={onClose}
                 className="w-full sm:w-auto px-5 py-2.5 bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 text-xs sm:text-sm font-medium rounded-lg transition-colors"
               >
-                ปิดหน้าต่าง
+                {isDedicatedSharedView ? 'ดูสถานที่ทั้งหมดในจังหวัดเลย' : 'ปิดหน้าต่าง'}
               </button>
             </div>
 
