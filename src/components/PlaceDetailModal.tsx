@@ -66,7 +66,7 @@ export const PlaceDetailModal: React.FC<PlaceDetailModalProps> = ({ place, onClo
     }
   };
 
-  const placeShareUrl = buildPlaceShareUrl(place.id);
+  const placeShareUrl = buildPlaceShareUrl(place);
   const shareText = `แนะนำที่เที่ยวจังหวัดเลย: ${place.name} (${place.district}) - LOEI JOURNEY`;
 
   const facebookShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(placeShareUrl)}`;

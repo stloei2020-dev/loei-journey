@@ -90,6 +90,31 @@ const STORAGE_KEY_DELETED = 'loei_journey_deleted_place_ids_v4';
 const STORAGE_KEY_PENDING_SYNC = 'loei_journey_pending_sync_ids_v4';
 const STORAGE_KEY_ARTICLES = 'loei_journey_articles_v4';
 const STORAGE_KEY_ADMIN_SESSION = 'loei_journey_admin_session_v4';
+const STORAGE_KEY_PLACES_SYNC_TS = 'loei_journey_places_sync_ts_v4';
+const STORAGE_KEY_ARTICLES_SYNC_TS = 'loei_journey_articles_sync_ts_v4';
+
+const PLACES_CACHE_TTL_MS = 10 * 60 * 1000;
+const ARTICLES_CACHE_TTL_MS = 30 * 60 * 1000;
+
+function getSyncTimestamp(key: string): number {
+  try {
+    return Number(localStorage.getItem(key) || '0') || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setSyncTimestamp(key: string, ts = Date.now()) {
+  try {
+    localStorage.setItem(key, String(ts));
+  } catch {}
+}
+
+function notifyLocalPlacesUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('loei:places-updated'));
+  }
+}
 
 // IndexedDB helper for high-capacity local storage (no 5MB localStorage limit for base64 photos)
 const IDB_NAME = 'loei_journey_idb';
@@ -455,92 +480,65 @@ function saveSingleKeyLocalStorageCache(places: Place[]) {
   }
 }
 
-// Data fetching & persistence for Places
+// Data fetching & persistence for Places (TTL-cached to protect free-tier Firestore daily read quota)
 export function subscribePlaces(callback: (places: Place[]) => void): () => void {
-  const pathForOnSnapshot = 'places';
-  const deletedIds = getDeletedPlaceIds();
+  let active = true;
 
-  // Immediately deliver full IndexedDB + localStorage list
-  getLocalPlacesAsync().then((localPlaces) => {
-    if (localPlaces.length > 0) {
+  const deliverLocal = async () => {
+    const localPlaces = await getLocalPlacesAsync();
+    if (active && localPlaces.length > 0) {
       callback(localPlaces);
+    }
+    return localPlaces;
+  };
+
+  deliverLocal().then(async (localPlaces) => {
+    if (!active) return;
+    const lastSync = getSyncTimestamp(STORAGE_KEY_PLACES_SYNC_TS);
+    const isFresh = localPlaces.length > 0 && Date.now() - lastSync < PLACES_CACHE_TTL_MS;
+    if (isFresh) {
+      setCloudSyncStatus('connected');
+      return;
+    }
+
+    const synced = await getPlaces(true);
+    if (active) {
+      callback(synced);
     }
   });
 
-  const unsubscribe = onSnapshot(
-    collection(db, pathForOnSnapshot),
-    async (snapshot) => {
-      setCloudSyncStatus('connected');
-      const fromFirestore: Place[] = [];
-      snapshot.forEach(docSnap => {
-        const id = docSnap.id;
-        if (!deletedIds.has(id)) {
-          fromFirestore.push({ id, ...(docSnap.data() as Omit<Place, 'id'>) });
-        }
-      });
+  const handleLocalChange = () => {
+    deliverLocal();
+  };
 
-      const localPlaces = await getLocalPlacesAsync();
-      const placeMap = new Map<string, Place>();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('loei:places-updated', handleLocalChange);
+  }
 
-      // Preserve locally saved items (including any unsynced or recent additions)
-      localPlaces.forEach(p => {
-        if (!deletedIds.has(p.id)) {
-          placeMap.set(p.id, p);
-        }
-      });
-
-      // Overlay Firestore docs (keeping newer local edit if timestamp is newer)
-      fromFirestore.forEach(p => {
-        const existing = placeMap.get(p.id);
-        if (!existing) {
-          placeMap.set(p.id, p);
-        } else {
-          const tCloud = new Date(p.updatedAt || p.createdAt || 0).getTime();
-          const tLocal = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
-          if (tCloud >= tLocal) {
-            placeMap.set(p.id, p);
-          }
-        }
-      });
-
-      const places = Array.from(placeMap.values());
-      places.sort((a, b) => {
-        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
-        return timeB - timeA;
-      });
-
-      idbPutManyPlaces(places).catch(() => {});
-      saveSingleKeyLocalStorageCache(places);
-
-      callback(places);
-    },
-    async (error) => {
-      if (isPermissionError(error)) {
-        handleFirestoreError(error, OperationType.GET, pathForOnSnapshot);
-      }
-      if (isQuotaError(error)) {
-        setCloudSyncStatus('quota_exceeded');
-        console.warn('Firestore daily read quota exceeded — serving full local IndexedDB/cache.');
-      } else {
-        setCloudSyncStatus('offline');
-        console.warn('Real-time subscription notice, serving local places:', error);
-      }
-      const localPlaces = await getLocalPlacesAsync();
-      callback(localPlaces);
+  return () => {
+    active = false;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('loei:places-updated', handleLocalChange);
     }
-  );
-
-  return unsubscribe;
+  };
 }
 
-export async function getPlaces(): Promise<Place[]> {
+export async function getPlaces(forceRefresh = false): Promise<Place[]> {
   const deletedIds = getDeletedPlaceIds();
+  const localPlaces = await getLocalPlacesAsync();
+  const lastSync = getSyncTimestamp(STORAGE_KEY_PLACES_SYNC_TS);
+
+  if (!forceRefresh && localPlaces.length > 0 && Date.now() - lastSync < PLACES_CACHE_TTL_MS) {
+    setCloudSyncStatus('connected');
+    return localPlaces;
+  }
+
   const firestorePlacesMap = new Map<string, Place>();
 
   try {
     const snapshot = await getDocs(collection(db, 'places'));
     setCloudSyncStatus('connected');
+    setSyncTimestamp(STORAGE_KEY_PLACES_SYNC_TS);
     snapshot.forEach(docSnap => {
       const data = docSnap.data() as Omit<Place, 'id'>;
       firestorePlacesMap.set(docSnap.id, { id: docSnap.id, ...data });
@@ -553,11 +551,11 @@ export async function getPlaces(): Promise<Place[]> {
       setCloudSyncStatus('quota_exceeded');
       console.warn('Firestore daily read quota exceeded during getPlaces, falling back to local DB.');
     } else {
+      setCloudSyncStatus('offline');
       console.warn('Note reading from Firestore, using local cache:', error);
     }
   }
 
-  const localPlaces = await getLocalPlacesAsync();
   const mergedMap = new Map<string, Place>();
 
   localPlaces.forEach(p => {
@@ -594,36 +592,48 @@ export async function getPlaces(): Promise<Place[]> {
   return result;
 }
 
-export async function getPlaceById(id: string): Promise<Place | null> {
-  if (!id) return null;
+export interface GetPlaceByIdResult {
+  place: Place | null;
+  reason: 'found' | 'quota_exceeded' | 'offline' | 'not_found';
+}
+
+export async function getPlaceById(id: string): Promise<GetPlaceByIdResult> {
+  if (!id) return { place: null, reason: 'not_found' };
   const deletedIds = getDeletedPlaceIds();
-  if (deletedIds.has(id)) return null;
+  if (deletedIds.has(id)) return { place: null, reason: 'not_found' };
 
   // 1. Try full local IndexedDB + localStorage first (0 Firestore reads)
   const localPlaces = await getLocalPlacesAsync();
   const localMatch = localPlaces.find((p) => p.id === id);
-  if (localMatch) return localMatch;
+  if (localMatch) return { place: localMatch, reason: 'found' };
 
-  // 2. Fallback to single-document Firestore read (only 1 read unit)
+  // 2. Check built-in sample places fallback (0 Firestore reads)
+  const sampleMatch = SAMPLE_PLACES.find((p) => p.id === id);
+  if (sampleMatch) return { place: sampleMatch, reason: 'found' };
+
+  // 3. Fallback to single-document Firestore read (only 1 read)
   try {
     const snap = await getDoc(doc(db, 'places', id));
     if (snap.exists()) {
       setCloudSyncStatus('connected');
       const place: Place = { id: snap.id, ...(snap.data() as Omit<Place, 'id'>) };
       idbPutPlace(place).catch(() => {});
-      return place;
+      return { place, reason: 'found' };
     }
+    setCloudSyncStatus('connected');
+    return { place: null, reason: 'not_found' };
   } catch (error) {
     if (isPermissionError(error)) {
       handleFirestoreError(error, OperationType.GET, `places/${id}`);
     }
     if (isQuotaError(error)) {
       setCloudSyncStatus('quota_exceeded');
+      return { place: null, reason: 'quota_exceeded' };
     }
+    setCloudSyncStatus('offline');
     console.warn('Could not fetch single place from Firestore:', error);
+    return { place: null, reason: 'offline' };
   }
-
-  return null;
 }
 
 export async function savePlace(place: Place): Promise<Place> {
@@ -650,6 +660,7 @@ export async function savePlace(place: Place): Promise<Place> {
   const existingLocal = await getLocalPlacesAsync();
   const nextList = [cleanPlace, ...existingLocal.filter(p => p.id !== sanitizedId)];
   saveSingleKeyLocalStorageCache(nextList);
+  notifyLocalPlacesUpdated();
 
   // 2. Persist to Firestore directly
   const { id, ...data } = cleanPlace;
@@ -713,6 +724,7 @@ export async function deletePlace(id: string): Promise<void> {
   } catch (e) {
     console.error(e);
   }
+  notifyLocalPlacesUpdated();
 
   // Delete from Firestore
   try {
@@ -724,7 +736,8 @@ export async function deletePlace(id: string): Promise<void> {
 
 export async function clearAllPlaces(): Promise<void> {
   await idbClearAllPlaces();
-  localStorage.setItem(STORAGE_KEY_PLACES, JSON.stringify([]));
+  saveSingleKeyLocalStorageCache([]);
+  notifyLocalPlacesUpdated();
   localStorage.removeItem(STORAGE_KEY_DELETED);
   localStorage.removeItem(STORAGE_KEY_PENDING_SYNC);
 
@@ -748,10 +761,19 @@ export async function restoreSamplePlaces(): Promise<number> {
   return SAMPLE_PLACES.length;
 }
 
-// Data fetching & persistence for Articles
-export async function getArticles(): Promise<Article[]> {
+// Data fetching & persistence for Articles (TTL-cached to reduce Firestore reads)
+export async function getArticles(forceRefresh = false): Promise<Article[]> {
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY_ARTICLES);
+    const lastSync = getSyncTimestamp(STORAGE_KEY_ARTICLES_SYNC_TS);
+    if (!forceRefresh && cached && Date.now() - lastSync < ARTICLES_CACHE_TTL_MS) {
+      return JSON.parse(cached);
+    }
+  } catch {}
+
   try {
     const snapshot = await getDocs(collection(db, 'articles'));
+    setSyncTimestamp(STORAGE_KEY_ARTICLES_SYNC_TS);
     if (!snapshot.empty) {
       const articles: Article[] = [];
       snapshot.forEach(docSnap => {
@@ -828,6 +850,7 @@ export async function trackEvent(
   placeName?: string,
   platform?: 'facebook' | 'line' | 'x' | 'copy' | 'web'
 ): Promise<void> {
+  if (currentCloudStatus === 'quota_exceeded') return;
   try {
     const eventId = `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const eventData: AnalyticsEvent = {

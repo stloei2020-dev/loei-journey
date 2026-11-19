@@ -16,7 +16,7 @@ export const PlaceCard: React.FC<PlaceCardProps> = ({ place, onSelect }) => {
 
   const handleCopyPlaceLink = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = buildPlaceShareUrl(place.id);
+    const url = buildPlaceShareUrl(place);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedPlaceLink(true);

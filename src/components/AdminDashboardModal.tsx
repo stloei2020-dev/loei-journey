@@ -314,9 +314,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     
     try {
       const isLogo = target === 'standardLogo';
-      const maxWidth = isLogo ? 300 : 960;
-      const maxHeight = isLogo ? 300 : 720;
-      const quality = isLogo ? 0.85 : 0.70;
+      const maxWidth = isLogo ? 240 : 800;
+      const maxHeight = isLogo ? 240 : 600;
+      const quality = isLogo ? 0.80 : 0.65;
 
       let totalOrig = 0;
       let totalComp = 0;

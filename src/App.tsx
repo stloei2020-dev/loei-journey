@@ -12,7 +12,6 @@ import {
   getCachedPlaces,
   restoreSamplePlaces,
   getArticles,
-  testConnection,
   trackEvent,
   auth,
   onAuthStateChanged,
@@ -24,6 +23,7 @@ import {
   getFirestoreUpgradeUrl,
   CloudSyncStatus
 } from './lib/firebase';
+import { decodePlaceShareFallback } from './constants/contact';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { CategoryFilterBar } from './components/CategoryFilterBar';
@@ -85,7 +85,8 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).has('place');
   });
-  const [sharedPlaceNotFound, setSharedPlaceNotFound] = useState(false);
+  const [sharedPlaceErrorReason, setSharedPlaceErrorReason] = useState<'quota_exceeded' | 'offline' | 'not_found' | null>(null);
+  const [sharedRetryNonce, setSharedRetryNonce] = useState(0);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [showDraftsInLiveSite, setShowDraftsInLiveSite] = useState<boolean>(true);
   const [showAllRecent, setShowAllRecent] = useState<boolean>(true);
@@ -95,7 +96,7 @@ export default function App() {
     setSelectedPlace(place);
     setPendingSharedPlaceId(null);
     setIsDedicatedSharedView(false);
-    setSharedPlaceNotFound(false);
+    setSharedPlaceErrorReason(null);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.search = '';
@@ -108,10 +109,10 @@ export default function App() {
     setSelectedPlace(null);
     setPendingSharedPlaceId(null);
     setIsDedicatedSharedView(false);
-    setSharedPlaceNotFound(false);
+    setSharedPlaceErrorReason(null);
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.has('place')) {
+      if (params.has('place') || params.has('d')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
@@ -121,8 +122,8 @@ export default function App() {
   const loadData = async () => {
     try {
       const [fetchedPlaces, fetchedArticles] = await Promise.all([
-        getPlaces(),
-        getArticles()
+        getPlaces(true),
+        getArticles(true)
       ]);
       setPlaces(fetchedPlaces);
       setArticles(fetchedArticles);
@@ -134,35 +135,38 @@ export default function App() {
   };
 
   useEffect(() => {
-    testConnection();
-    trackEvent('pageview', undefined, undefined, 'web');
-
-    // Subscribe to cloud sync / quota status
     const unsubscribeCloud = subscribeCloudSyncStatus(setCloudStatus);
-
-    // Single real-time subscription (immediately delivers IndexedDB + cache, then syncs Firestore)
-    const unsubscribePlaces = subscribePlaces((livePlaces) => {
-      setPlaces(livePlaces);
-      setLoading(false);
-    });
-
-    // Load initial articles once (avoid redundant Firestore reads)
-    getArticles()
-      .then((arts) => setArticles(arts))
-      .catch((err) => console.error(err));
-
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setAdminUser(user);
     });
 
     return () => {
       unsubscribeCloud();
-      unsubscribePlaces();
       unsubscribeAuth();
     };
   }, []);
 
-  // Resolve deep-linked single place (?place=<id>)
+  // Only load the full catalog + articles when NOT locked in initial dedicated single-place mode
+  useEffect(() => {
+    if (isDedicatedSharedView) return;
+
+    trackEvent('pageview', undefined, undefined, 'web');
+
+    const unsubscribePlaces = subscribePlaces((livePlaces) => {
+      setPlaces(livePlaces);
+      setLoading(false);
+    });
+
+    getArticles()
+      .then((arts) => setArticles(arts))
+      .catch((err) => console.error(err));
+
+    return () => {
+      unsubscribePlaces();
+    };
+  }, [isDedicatedSharedView]);
+
+  // Resolve deep-linked single place (?place=<id>) without burning full-collection Firestore reads
   useEffect(() => {
     if (!pendingSharedPlaceId) return;
 
@@ -170,27 +174,39 @@ export default function App() {
     if (fromState) {
       setSelectedPlace(fromState);
       setPendingSharedPlaceId(null);
-      setSharedPlaceNotFound(false);
+      setSharedPlaceErrorReason(null);
       return;
     }
 
     let cancelled = false;
-    getPlaceById(pendingSharedPlaceId).then((fetched) => {
+    getPlaceById(pendingSharedPlaceId).then((res) => {
       if (cancelled) return;
-      if (fetched) {
-        setSelectedPlace(fetched);
+      if (res.place) {
+        setSelectedPlace(res.place);
         setPendingSharedPlaceId(null);
-        setSharedPlaceNotFound(false);
-      } else if (cloudStatus === 'connected' || cloudStatus === 'quota_exceeded' || cloudStatus === 'offline') {
-        setSharedPlaceNotFound(true);
-        setPendingSharedPlaceId(null);
+        setSharedPlaceErrorReason(null);
+        return;
       }
+
+      // If Firestore quota is full / offline / not yet synced across origins, recover from URL snapshot if present
+      if (typeof window !== 'undefined') {
+        const fallbackPlace = decodePlaceShareFallback(window.location.search, pendingSharedPlaceId);
+        if (fallbackPlace) {
+          setSelectedPlace(fallbackPlace);
+          setPendingSharedPlaceId(null);
+          setSharedPlaceErrorReason(null);
+          return;
+        }
+      }
+
+      setSharedPlaceErrorReason(res.reason === 'found' ? 'not_found' : res.reason);
+      setPendingSharedPlaceId(null);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pendingSharedPlaceId, places, cloudStatus]);
+  }, [pendingSharedPlaceId, places, sharedRetryNonce]);
 
   // Keep document title synchronized when viewing a specific shared place
   useEffect(() => {
@@ -794,20 +810,48 @@ export default function App() {
         </div>
       )}
 
-      {sharedPlaceNotFound && !selectedPlace && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center max-w-sm w-full shadow-xl space-y-4">
-            <div className="text-base font-bold text-stone-900">ไม่พบข้อมูลสถานที่ที่ระบุ</div>
-            <p className="text-xs text-stone-500">
-              ลิงก์สถานที่นี้อาจถูกลบออกหรือยังไม่ได้ซิงค์ข้อมูลจากระบบคลาวด์
+      {sharedPlaceErrorReason && !selectedPlace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0C1C14] p-4">
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 text-center max-w-md w-full shadow-2xl space-y-4">
+            <div className="text-base font-bold text-stone-900">
+              {sharedPlaceErrorReason === 'quota_exceeded'
+                ? 'ฐานข้อมูลคลาวด์ใช้งานครบโควต้าประจำวันชั่วคราว'
+                : sharedPlaceErrorReason === 'offline'
+                  ? 'ไม่สามารถเชื่อมต่อฐานข้อมูลคลาวด์ได้ในขณะนี้'
+                  : 'ไม่พบข้อมูลสถานที่ที่ระบุ'}
+            </div>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              {sharedPlaceErrorReason === 'quota_exceeded'
+                ? 'ระบบฐานข้อมูลฟรีมีผู้เข้าชมครบโควต้าอ่านข้อมูลรายวันแล้ว กรุณาลองเปิดลิงก์ใหม่อีกครั้งหลังเวลาประมาณ 15:00 น. ตามเวลาไทย หรือแชร์ลิงก์ใหม่อีกครั้งจากหน้าสถานที่'
+                : sharedPlaceErrorReason === 'offline'
+                  ? 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'
+                  : 'ลิงก์สถานที่นี้อาจถูกลบออกหรือยังไม่ได้บันทึกขึ้นระบบคลาวด์จากเครื่องผู้ดูแล'}
             </p>
-            <button
-              type="button"
-              onClick={handleClosePlace}
-              className="px-4 py-2 bg-[#153326] text-white text-xs font-medium rounded-lg hover:bg-emerald-900 transition-colors"
-            >
-              ดูสถานที่ทั้งหมดในจังหวัดเลย
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const currentId = typeof window !== 'undefined'
+                    ? new URLSearchParams(window.location.search).get('place')
+                    : null;
+                  if (currentId) {
+                    setSharedPlaceErrorReason(null);
+                    setPendingSharedPlaceId(currentId);
+                    setSharedRetryNonce((n) => n + 1);
+                  }
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-medium rounded-lg transition-colors"
+              >
+                ลองโหลดอีกครั้ง
+              </button>
+              <button
+                type="button"
+                onClick={handleClosePlace}
+                className="w-full sm:w-auto px-4 py-2 bg-[#153326] text-white text-xs font-medium rounded-lg hover:bg-emerald-900 transition-colors"
+              >
+                ดูสถานที่ทั้งหมดในจังหวัดเลย
+              </button>
+            </div>
           </div>
         </div>
       )}
