@@ -58,9 +58,11 @@ import {
   Check,
   Users,
   Lock,
-  Sparkles
+  Sparkles,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
+import { exportPlacesToExcel, exportAnalyticsToExcel, exportArticlesToExcel } from '../lib/exportExcel';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
@@ -1527,7 +1529,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap shrink-0">
+                        {filteredPlacesList.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const parts: string[] = [];
+                              if (statusFilter !== 'all') parts.push(`สถานะ: ${statusFilter === 'draft' ? 'แบบร่าง' : 'เผยแพร่แล้ว'}`);
+                              if (categoryFilter !== 'all') parts.push(`หมวดหมู่: ${categoryFilter}`);
+                              if (districtFilter !== 'all') parts.push(`พื้นที่: ${districtFilter}`);
+                              if (searchPlaceFilter.trim()) parts.push(`คำค้น: "${searchPlaceFilter.trim()}"`);
+                              exportPlacesToExcel(filteredPlacesList, {
+                                filterDescription: parts.length > 0 ? parts.join(' | ') : 'ทั้งหมดในระบบ (Admin)'
+                              });
+                              setStatusMessage({
+                                text: `ส่งออกไฟล์ Excel (.xlsx) สำเร็จ (${filteredPlacesList.length} สถานที่)`
+                              });
+                            }}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-medium transition-colors shadow-2xs cursor-pointer"
+                            title="ส่งออกข้อมูลสถานที่ที่แสดงอยู่เป็นไฟล์ Microsoft Excel (.xlsx)"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Export Excel ({filteredPlacesList.length})</span>
+                          </button>
+                        )}
                         {places.length > 0 && (
                           <button
                             type="button"
@@ -1743,16 +1768,31 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     ข้อมูลสรุปการเข้าชมสถานที่และพฤติกรรมการแชร์ต่อผ่านช่องทาง Social Media ต่างๆ
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setLoadingAnalytics(true);
-                    getAnalyticsSummary(places).then(setAnalytics).finally(() => setLoadingAnalytics(false));
-                  }}
-                  className="px-3.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin' : ''}`} />
-                  <span>รีเฟรชสถิติ</span>
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {analytics && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportAnalyticsToExcel(analytics, places);
+                        setStatusMessage({ text: 'ส่งออกรายงานสถิติเป็นไฟล์ Excel (.xlsx) สำเร็จ' });
+                      }}
+                      className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Export สถิติ Excel</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setLoadingAnalytics(true);
+                      getAnalyticsSummary(places).then(setAnalytics).finally(() => setLoadingAnalytics(false));
+                    }}
+                    className="px-3.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin' : ''}`} />
+                    <span>รีเฟรชสถิติ</span>
+                  </button>
+                </div>
               </div>
 
               {analytics && (
@@ -2070,17 +2110,32 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               ) : (
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                     <span className="text-xs text-stone-500">
                       บทความทั้งหมด {articles.length} เรื่อง
                     </span>
-                    <button
-                      onClick={() => setEditingArticle({ category: 'Travel Guide' })}
-                      className="flex items-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>เขียนบทความใหม่</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {articles.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            exportArticlesToExcel(articles);
+                            setStatusMessage({ text: `ส่งออกรายการบทความ (${articles.length} เรื่อง) เป็น Excel สำเร็จ` });
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Export Excel</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setEditingArticle({ category: 'Travel Guide' })}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#153326] hover:bg-emerald-900 text-white rounded-lg text-xs font-medium transition-colors shadow-xs cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>เขียนบทความใหม่</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-3">

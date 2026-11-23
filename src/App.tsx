@@ -44,8 +44,10 @@ import {
   ArrowRight,
   Briefcase,
   Store,
-  Layers
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
+import { exportPlacesToExcel } from './lib/exportExcel';
 
 export default function App() {
   const [places, setPlaces] = useState<Place[]>(getCachedPlaces);
@@ -529,12 +531,35 @@ export default function App() {
                 </div>
               </div>
 
-              <button
-                onClick={handleResetFilters}
-                className="text-xs text-[#153326] font-medium hover:underline"
-              >
-                ล้างการค้นหาทั้งหมด
-              </button>
+              <div className="flex items-center gap-3">
+                {filteredPlaces.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parts: string[] = [];
+                      if (selectedCategory !== 'all') parts.push(`หมวดหมู่: ${selectedCategory}`);
+                      if (selectedDistrict !== 'all') parts.push(`พื้นที่: ${selectedDistrict}`);
+                      if (priceFilter !== 'all') parts.push(`ราคา: ${priceFilter}`);
+                      if (hasStandardsOnly) parts.push('เฉพาะที่มีมาตรฐานรับรอง');
+                      if (searchQuery.trim()) parts.push(`คำค้น: "${searchQuery.trim()}"`);
+                      exportPlacesToExcel(filteredPlaces, {
+                        filterDescription: parts.join(' | ') || 'ผลการค้นหา'
+                      });
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-full transition-colors cursor-pointer"
+                    title="ดาวน์โหลดข้อมูลรายการที่แสดงเป็นไฟล์ Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Export Excel ({filteredPlaces.length})</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleResetFilters}
+                  className="text-xs text-[#153326] font-medium hover:underline cursor-pointer"
+                >
+                  ล้างการค้นหาทั้งหมด
+                </button>
+              </div>
             </div>
           )}
 
@@ -633,7 +658,22 @@ export default function App() {
                       สถานที่และธุรกิจอัปเดตล่าสุด ({viewablePlaces.length} แห่ง)
                     </h2>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {viewablePlaces.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          exportPlacesToExcel(viewablePlaces, {
+                            filterDescription: 'สถานที่และธุรกิจทั้งหมดบนหน้าเว็บไซต์'
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1 rounded-full transition-colors cursor-pointer"
+                        title="ดาวน์โหลดข้อมูลสถานที่ทั้งหมดเป็นไฟล์ Excel (.xlsx)"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Export Excel</span>
+                      </button>
+                    )}
                     {viewablePlaces.length > 6 && (
                       <button
                         type="button"
